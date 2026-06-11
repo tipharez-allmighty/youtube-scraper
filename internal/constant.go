@@ -1,3 +1,3 @@
 package internal
 
-const BaseUrl = "https://www.googleapis.com/youtube/v3/"
+const BaseURL = "https://www.googleapis.com/youtube/v3/"

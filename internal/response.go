@@ -1,7 +1,7 @@
 package internal
 
 type YoutubeResponse interface {
-	Url() string
+	URL() string
 }
 
 type SearchResponse struct {
@@ -17,4 +17,4 @@ type SearchResponse struct {
 	} `json:"items"`
 }
 
-func (*SearchResponse) Url() string { return "search" }
+func (*SearchResponse) URL() string { return "search" }

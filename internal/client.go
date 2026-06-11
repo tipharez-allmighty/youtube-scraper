@@ -2,6 +2,7 @@
 package internal
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -18,8 +19,8 @@ func New(apiKey string) *Client {
 
 func (c *Client) Get(params url.Values, out YoutubeResponse) error {
 	params.Set("key", c.apiKey)
-	reqUrl := BaseUrl + out.Url() + "?" + params.Encode()
-	resp, err := http.Get(reqUrl)
+	reqURL := BaseURL + out.URL() + "?" + params.Encode()
+	resp, err := http.Get(reqURL)
 	if err != nil {
 		return fmt.Errorf("failed to make request: %w", err)
 	}
@@ -28,4 +29,14 @@ func (c *Client) Get(params url.Values, out YoutubeResponse) error {
 	if err != nil {
 		return fmt.Errorf("failed to read response: %w", err)
 	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		var apiErr APIError
+		if err := json.Unmarshal(body, &apiErr); err != nil {
+			return fmt.Errorf("failed to unmarshal error response: %w, error status code: %v", err, resp.StatusCode)
+		}
+		if apiErr.ErrorData != nil {
+			return apiErr
+		}
+	}
+	return json.Unmarshal(body, out)
 }
