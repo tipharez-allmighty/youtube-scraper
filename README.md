@@ -10,10 +10,11 @@ You give it a list of search queries, it fans out across YouTube's API — searc
 
 ## Setup
 
-**Build:**
+**Build and install:**
 
 ```bash
 go build -o yt-scraper ./cmd/main.go
+mv yt-scraper /usr/local/bin/
 ```
 
 **Configure** via environment variables:
@@ -36,7 +37,7 @@ Alternatively, place a `.env` file in the directory you run the binary from and 
 Input is passed as JSON via stdin:
 
 ```bash
-./yt-scraper run <<< '{
+yt-scraper run <<< '{
   "queries": [
     { "text": "golang concurrency" },
     { "text": "rust vs go" }
@@ -51,7 +52,7 @@ Input is passed as JSON via stdin:
 Or from a file:
 
 ```bash
-./yt-scraper run < input.json
+yt-scraper run < input.json
 ```
 
 **Input fields:**
@@ -72,17 +73,17 @@ Or from a file:
 List recent jobs (defaults to last 5):
 
 ```bash
-./yt-scraper jobs
-./yt-scraper jobs list
-./yt-scraper jobs list -l 20
-./yt-scraper jobs list -s /path/to/storage.db
+yt-scraper jobs
+yt-scraper jobs list
+yt-scraper jobs list -l 20
+yt-scraper jobs list -s /path/to/storage.db
 ```
 
 Check task counts for a specific job:
 
 ```bash
-./yt-scraper jobs status <job-id>
-./yt-scraper jobs status <job-id> -s /path/to/storage.db
+yt-scraper jobs status <job-id>
+yt-scraper jobs status <job-id> -s /path/to/storage.db
 ```
 
 The `-s` flag on both `list` and `status` lets you point at a different SQLite file without changing your environment.
@@ -92,9 +93,9 @@ The `-s` flag on both `list` and `status` lets you point at a different SQLite f
 ## Help
 
 ```bash
-./yt-scraper --help
-./yt-scraper run --help
-./yt-scraper jobs --help
-./yt-scraper jobs list --help
-./yt-scraper jobs status --help
+yt-scraper --help
+yt-scraper run --help
+yt-scraper jobs --help
+yt-scraper jobs list --help
+yt-scraper jobs status --help
 ```
