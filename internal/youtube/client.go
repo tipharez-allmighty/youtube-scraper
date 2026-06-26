@@ -1,5 +1,5 @@
-// Package internal
-package internal
+// Package youtube.
+package youtube
 
 import (
 	"encoding/json"
@@ -7,6 +7,10 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+)
+
+const (
+	BaseURL = "https://www.googleapis.com/youtube/v3/"
 )
 
 type Client struct {
@@ -17,7 +21,7 @@ func New(apiKey string) *Client {
 	return &Client{apiKey: apiKey}
 }
 
-func (c *Client) Get(params url.Values, out YoutubeResponse) error {
+func (c *Client) get(params url.Values, out YoutubeResponse) error {
 	params.Set("key", c.apiKey)
 	reqURL := BaseURL + out.URL() + "?" + params.Encode()
 	resp, err := http.Get(reqURL)

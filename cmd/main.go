@@ -1,28 +1,26 @@
 package main
 
 import (
-	"encoding/json"
-	"fmt"
+	"log/slog"
 	"os"
 
-	"tipharez-allmighty/youtube-scraper/youtube"
+	"tipharez-allmighty/youtube-scraper/internal/cli"
+	"tipharez-allmighty/youtube-scraper/internal/config"
 
-	"github.com/go-playground/validator/v10"
+	"github.com/alecthomas/kong"
 )
 
 func main() {
-	apiKey := os.Getenv("YOUTUBE_API_KEY")
-	if apiKey == "" {
-		fmt.Fprintln(os.Stderr, "youtube api key is not set")
+	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	slog.SetDefault(logger)
+
+	cfg, err := config.Load()
+	if err != nil {
+		logger.Error("failed to load config", "error", err)
 		os.Exit(1)
 	}
-	var input youtube.InputSchema
-	if err := json.NewDecoder(os.Stdin).Decode(&input); err != nil {
-		fmt.Fprintln(os.Stderr, "invalid input:", err)
-	}
-	inputValidator := validator.New()
-	if err := inputValidator.Struct(input); err != nil {
-		fmt.Fprintln(os.Stderr, "wrong input format:", err)
-	}
-	fmt.Println(input)
+	var cli cli.CLI
+	ctx := kong.Parse(&cli)
+	err = ctx.Run(cfg)
+	ctx.FatalIfErrorf(err)
 }
