@@ -168,6 +168,8 @@ func (j *JobsStatusCmd) Run(cfg *config.Config) error {
 	return w.Flush()
 }
 
+type ResumeCmd struct{}
+
 func getStore(cfg *config.Config, stateFile string) (*storage.Store, error) {
 	dbPath := stateFile
 	if dbPath == "" {
