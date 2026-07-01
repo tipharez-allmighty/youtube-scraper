@@ -1,4 +1,4 @@
-package youtube 
+package youtube
 
 import "fmt"
 
@@ -20,5 +20,9 @@ func (a APIError) Error() string {
 	if a.ErrorData == nil {
 		return "unknown youtube api error"
 	}
-	return fmt.Sprintf("api %d %s: %s", a.ErrorData.Code, a.ErrorData.Errors[0].Reason, a.ErrorData.Message)
+	reason := "unknown_reason"
+	if len(a.ErrorData.Errors) > 0 {
+		reason = a.ErrorData.Errors[0].Reason
+	}
+	return fmt.Sprintf("api %d %s: %s", a.ErrorData.Code, reason, a.ErrorData.Message)
 }
