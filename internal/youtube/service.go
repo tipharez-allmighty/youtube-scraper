@@ -3,11 +3,15 @@ package youtube
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
+	"math/rand/v2"
 	"net/url"
 	"strings"
+	"time"
 
+	"tipharez-allmighty/youtube-scraper/internal/config"
 	"tipharez-allmighty/youtube-scraper/internal/storage"
 
 	"github.com/google/uuid"
@@ -18,10 +22,35 @@ const (
 	errCompleteTask = "failed to complete task: %w"
 )
 
-type PaginationScraperFunc func(pageToken string) (nextPageToken string, err error)
+type (
+	PaginationScraperFunc func(pageToken string) (nextPageToken string, err error)
+	NetworkRequestFunc    func(parms url.Values, out YoutubeResponse) (err error)
+)
 
-func RunPagination(maxLimit int, fn PaginationScraperFunc) {
-	pageToken := ""
+type Context struct {
+	JobID      string
+	MaxResults int
+}
+type VideosContext struct {
+	Context
+	PageToken string
+	Query     string
+}
+
+type ThreadsContext struct {
+	Context
+	PageToken string
+	VideoID   string
+}
+
+type CommentsContext struct {
+	Context
+	PageToken string
+	CommentID string
+}
+
+func RunPagination(maxLimit int, startToken string, fn PaginationScraperFunc) {
+	pageToken := startToken
 	pagesFetched := 0
 	for {
 		nextPageToken, err := fn(pageToken)
@@ -40,41 +69,64 @@ func RunPagination(maxLimit int, fn PaginationScraperFunc) {
 	}
 }
 
-func GetVideos(c *Client, s *storage.Store, jobID string, q string, maxResults int, pageToken string, videoCh chan<- SearchResponse) (nextPageToken string, err error) {
+func WithExpBackoff(fn NetworkRequestFunc, params url.Values, out YoutubeResponse, maxRetries int) error {
+	var err error
+	for retry := range maxRetries {
+		err = fn(params, out)
+		if err != nil {
+			if apiErr, ok := errors.AsType[APIError](err); ok {
+				errCode := apiErr.ErrorData.Code
+				if errCode == 429 || errCode == 403 {
+					if retry == maxRetries-1 || apiErr.Reason() == CommentsDisabled {
+						return err
+					}
+					retryDelay := 1 << retry
+					time.Sleep(time.Duration(float64(retryDelay)+rand.Float64()) * time.Second)
+					continue
+				}
+				return err
+			}
+		}
+		return err
+	}
+	return err
+}
+
+func GetVideos(c *Client, s *storage.Store, cfg *config.Config, vctx VideosContext, threadCh chan<- ThreadsContext) (nextPageToken string, err error) {
 	params := url.Values{
-		"q":          {q},
+		"q":          {vctx.Query},
 		"type":       {"video"},
 		"part":       {"id,snippet"},
-		"maxResults": {fmt.Sprint(maxResults)},
+		"maxResults": {fmt.Sprint(vctx.MaxResults)},
 	}
 	var pageTokenPtr *string
-	if pageToken != "" {
-		pageTokenPtr = &pageToken
-		params.Set("pageToken", pageToken)
+	if vctx.PageToken != "" {
+		pageTokenPtr = &vctx.PageToken
+		params.Set("pageToken", vctx.PageToken)
 	}
 
-	taskID := getDeterministicID(jobID, q, pageToken)
+	taskID := getDeterministicID(vctx.JobID, vctx.Query, vctx.PageToken)
 	var payload []byte
-	payload, err = json.Marshal(params)
+	payload, err = json.Marshal(vctx)
 	if err != nil {
 		return "", err
 	}
-	task := storage.Task{ID: taskID, JobID: jobID, Status: storage.Running, Type: storage.Search, Payload: string(payload), PageToken: pageTokenPtr}
+	task := storage.Task{ID: taskID, JobID: vctx.JobID, Status: storage.Running, Type: storage.Search, Payload: string(payload), PageToken: pageTokenPtr}
 	if err = s.InsertTask(task); err != nil {
 		return "", fmt.Errorf(errCreateTask, err)
 	}
 	defer failTask(s, taskID, &err)
 
 	var searchResponse SearchResponse
-	if err = c.get(params, &searchResponse); err != nil {
+	if err = WithExpBackoff(c.get, params, &searchResponse, cfg.MaxRetries); err != nil {
 		return "", fmt.Errorf("search failed: %w", err)
 	}
 	videos := make([]storage.Video, 0, len(searchResponse.Items))
 	for _, item := range searchResponse.Items {
 		videos = append(videos, storage.Video{
 			ID:          item.ID.VideoID,
-			JobID:       jobID,
-			QueryText:   q,
+			JobID:       vctx.JobID,
+			QueryText:   vctx.Query,
 			Title:       item.Snippet.Title,
 			Description: item.Snippet.Description,
 		})
@@ -85,35 +137,57 @@ func GetVideos(c *Client, s *storage.Store, jobID string, q string, maxResults i
 		return "", fmt.Errorf(errCompleteTask, err)
 	}
 	slog.Info("Videos were found", "items", len(searchResponse.Items))
-	videoCh <- searchResponse
+	for _, item := range searchResponse.Items {
+		threadContext := ThreadsContext{
+			Context: Context{
+				JobID:      vctx.JobID,
+				MaxResults: vctx.MaxResults,
+			},
+			VideoID:   item.ID.VideoID,
+			PageToken: "",
+		}
+		threadCh <- threadContext
+	}
 	return searchResponse.NextPageToken, nil
 }
 
-func GetCommentThreads(c *Client, s *storage.Store, jobID string, videoID string, maxResults int, pageToken string, commentThreadCh chan<- string) (nextPageToken string, err error) {
+func GetCommentThreads(c *Client, s *storage.Store, cfg *config.Config, tctx ThreadsContext, commentCh chan<- CommentsContext) (nextPageToken string, err error) {
 	params := url.Values{
-		"videoId":    {videoID},
+		"videoId":    {tctx.VideoID},
 		"part":       {"id,snippet,replies"},
-		"maxResults": {fmt.Sprint(maxResults)},
+		"maxResults": {fmt.Sprint(tctx.MaxResults)},
 	}
 	var pageTokenPtr *string
-	if pageToken != "" {
-		pageTokenPtr = &pageToken
-		params.Set("pageToken", pageToken)
+	if tctx.PageToken != "" {
+		pageTokenPtr = &tctx.PageToken
+		params.Set("pageToken", tctx.PageToken)
 	}
 	var payload []byte
-	payload, err = json.Marshal(params)
+	payload, err = json.Marshal(tctx)
 	if err != nil {
 		return "", err
 	}
-	taskID := getDeterministicID(jobID, videoID, pageToken)
-	task := storage.Task{ID: taskID, JobID: jobID, Status: storage.Running, Type: storage.Thread, Payload: string(payload), PageToken: pageTokenPtr}
+	taskID := getDeterministicID(tctx.JobID, tctx.VideoID, tctx.PageToken)
+	task := storage.Task{ID: taskID, JobID: tctx.JobID, Status: storage.Running, Type: storage.Thread, Payload: string(payload), PageToken: pageTokenPtr}
 	if err = s.InsertTask(task); err != nil {
 		return "", fmt.Errorf(errCreateTask, err)
 	}
 	defer failTask(s, taskID, &err)
 
 	var commentThreadResponse CommentThreadResponse
-	if err = c.get(params, &commentThreadResponse); err != nil {
+	err = WithExpBackoff(c.get, params, &commentThreadResponse, cfg.MaxRetries)
+	if err != nil {
+		if apiErr, ok := errors.AsType[APIError](err); ok {
+			if apiErr.Reason() == CommentsDisabled {
+				slog.Info("Comments for video are disabled", "video_id", tctx.VideoID, "error", err)
+				if err = s.CompleteTask(taskID, func(tx *sql.Tx) error {
+					return nil
+				}); err != nil {
+					return "", fmt.Errorf(errCompleteTask, err)
+				}
+				return "", nil
+			}
+		}
 		return "", fmt.Errorf("fetching comment threads failed: %w", err)
 	}
 	slog.Info("Comment threads were found", "items", len(commentThreadResponse.Items))
@@ -124,7 +198,7 @@ func GetCommentThreads(c *Client, s *storage.Store, jobID string, videoID string
 		thread := storage.CommentThread{
 			CommentBase: storage.CommentBase{
 				ID:           item.ID,
-				JobID:        jobID,
+				JobID:        tctx.JobID,
 				Author:       item.Snippet.TopLevelComment.Snippet.AuthorDisplayName,
 				TextDisplay:  item.Snippet.TopLevelComment.Snippet.TextDisplay,
 				TextOriginal: item.Snippet.TopLevelComment.Snippet.TextOriginal,
@@ -153,10 +227,15 @@ func GetCommentThreads(c *Client, s *storage.Store, jobID string, videoID string
 		return "", fmt.Errorf(errCompleteTask, err)
 	}
 	for _, commentID := range commentIDs {
-		commentThreadCh <- commentID
+		commentCtx := CommentsContext{
+			Context:   tctx.Context,
+			CommentID: commentID,
+			PageToken: "",
+		}
+		commentCh <- commentCtx
 	}
 	for _, commentThread := range topLevelReplies {
-		if err = processTopLevelReplies(s, jobID, maxResults, commentThread); err != nil {
+		if err = processTopLevelReplies(s, tctx.JobID, tctx.MaxResults, commentThread); err != nil {
 			return "", err
 		}
 	}
@@ -164,30 +243,30 @@ func GetCommentThreads(c *Client, s *storage.Store, jobID string, videoID string
 	return commentThreadResponse.NextPageToken, nil
 }
 
-func GetComments(c *Client, s *storage.Store, jobID string, commentID string, pageToken string, maxResults int) (nextPageToken string, err error) {
+func GetComments(c *Client, s *storage.Store, cfg *config.Config, cctx CommentsContext) (nextPageToken string, err error) {
 	params := url.Values{
-		"parentId":   {commentID},
+		"parentId":   {cctx.CommentID},
 		"part":       {"id,snippet"},
-		"maxResults": {fmt.Sprint(maxResults)},
+		"maxResults": {fmt.Sprint(cctx.MaxResults)},
 	}
 	var pageTokenPtr *string
-	if pageToken != "" {
-		pageTokenPtr = &pageToken
-		params.Set("pageToken", pageToken)
+	if cctx.PageToken != "" {
+		pageTokenPtr = &cctx.PageToken
+		params.Set("pageToken", cctx.PageToken)
 	}
 	var payload []byte
-	payload, err = json.Marshal(params)
+	payload, err = json.Marshal(cctx)
 	if err != nil {
 		return "", err
 	}
-	taskID := getDeterministicID(jobID, commentID, pageToken)
-	task := storage.Task{ID: taskID, JobID: jobID, Status: storage.Running, Type: storage.Reply, Payload: string(payload), PageToken: pageTokenPtr}
+	taskID := getDeterministicID(cctx.JobID, cctx.CommentID, cctx.PageToken)
+	task := storage.Task{ID: taskID, JobID: cctx.JobID, Status: storage.Running, Type: storage.Reply, Payload: string(payload), PageToken: pageTokenPtr}
 	if err = s.InsertTask(task); err != nil {
 		return "", fmt.Errorf(errCreateTask, err)
 	}
 	defer failTask(s, taskID, &err)
 	var commentResponse CommentResponse
-	if err = c.get(params, &commentResponse); err != nil {
+	if err = WithExpBackoff(c.get, params, &commentResponse, cfg.MaxRetries); err != nil {
 		return "", fmt.Errorf("fetching comments failed: %w", err)
 	}
 	slog.Info("Comments were found", "items", len(commentResponse.Items))
@@ -196,7 +275,7 @@ func GetComments(c *Client, s *storage.Store, jobID string, commentID string, pa
 		comments = append(comments, storage.Comment{
 			CommentBase: storage.CommentBase{
 				ID:           item.ID,
-				JobID:        jobID,
+				JobID:        cctx.JobID,
 				Author:       item.Snippet.AuthorDisplayName,
 				TextDisplay:  item.Snippet.TextDisplay,
 				TextOriginal: item.Snippet.TextOriginal,
@@ -214,29 +293,16 @@ func GetComments(c *Client, s *storage.Store, jobID string, commentID string, pa
 	return commentResponse.NextPageToken, nil
 }
 
-func getDeterministicID(parts ...string) string {
-	return uuid.NewMD5(uuid.Nil, []byte(strings.Join(parts, ":"))).String()
-}
-
-func failTask(s *storage.Store, taskID string, errPtr *error) {
-	if errPtr == nil || *errPtr == nil {
-		return
-	}
-	errMsg := (*errPtr).Error()
-	if err := s.UpdateTaskStatus(taskID, storage.Failed, &errMsg); err != nil {
-		*errPtr = fmt.Errorf("failed updating task to failed status (%v): %w", err, *errPtr)
-	}
-}
-
 func processTopLevelReplies(s *storage.Store, jobID string, maxResults int, item CommentThread) error {
-	comments := make([]storage.Comment, 0, len(item.Replies.Comments))
-	replyParams := url.Values{
-		"parentId":   {item.Snippet.TopLevelComment.ID},
-		"part":       {"id,snippet"},
-		"maxResults": {fmt.Sprint(maxResults)},
+	cctx := CommentsContext{
+		Context: Context{
+			JobID:      jobID,
+			MaxResults: maxResults,
+		},
+		CommentID: item.Snippet.TopLevelComment.ID,
+		PageToken: "",
 	}
-
-	replyPayload, err := json.Marshal(replyParams)
+	replyPayload, err := json.Marshal(cctx)
 	if err != nil {
 		return err
 	}
@@ -245,6 +311,7 @@ func processTopLevelReplies(s *storage.Store, jobID string, maxResults int, item
 	if err = s.InsertTask(task); err != nil {
 		return fmt.Errorf(errCreateTask, err)
 	}
+	comments := make([]storage.Comment, 0, len(item.Replies.Comments))
 	for _, comment := range item.Replies.Comments {
 		comments = append(comments, storage.Comment{
 			CommentBase: storage.CommentBase{
@@ -267,4 +334,18 @@ func processTopLevelReplies(s *storage.Store, jobID string, maxResults int, item
 		return fmt.Errorf(errCompleteTask, err)
 	}
 	return nil
+}
+
+func getDeterministicID(parts ...string) string {
+	return uuid.NewMD5(uuid.Nil, []byte(strings.Join(parts, ":"))).String()
+}
+
+func failTask(s *storage.Store, taskID string, errPtr *error) {
+	if errPtr == nil || *errPtr == nil {
+		return
+	}
+	errMsg := (*errPtr).Error()
+	if err := s.UpdateTaskStatus(taskID, storage.Failed, &errMsg); err != nil {
+		*errPtr = fmt.Errorf("failed updating task to failed status (%v): %w", err, *errPtr)
+	}
 }

@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+
+	"tipharez-allmighty/youtube-scraper/internal/input"
 )
 
 type Store struct {
@@ -65,7 +67,7 @@ func (s *Store) SelectJobsStatus(jobID string) (*JobStatus, error) {
 	var j JobStatus
 	var input string
 	if err := row.Scan(
-		&j.ID, &input, &j.Total, &j.Failed, &j.Failed,
+		&j.ID, &input, &j.Total, &j.Running, &j.Failed,
 	); err != nil {
 		return nil, err
 	}
@@ -73,6 +75,53 @@ func (s *Store) SelectJobsStatus(jobID string) (*JobStatus, error) {
 		return nil, err
 	}
 	return &j, nil
+}
+
+func (s *Store) SelectJobInput(jobID string) (*input.InputSchema, error) {
+	row := s.db.QueryRow(`
+	SELECT input 
+	FROM jobs
+	WHERE jobs.id = ?
+	`, jobID)
+
+	var jobInput string
+	if err := row.Scan(
+		&jobInput,
+	); err != nil {
+		return nil, err
+	}
+	var inputSchema input.InputSchema
+	if err := json.Unmarshal([]byte(jobInput), &inputSchema); err != nil {
+		return nil, err
+	}
+	return &inputSchema, nil
+}
+
+func (s *Store) SelectFailedTasks(jobID string) ([]Task, error) {
+	rows, err := s.db.Query(`
+	SELECT * FROM tasks
+	WHERE tasks.job_id = ? AND tasks.status = 'failed'
+	ORDER by created_at ASC
+	`, jobID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var tasks []Task
+	for rows.Next() {
+		var t Task
+		if err := rows.Scan(
+			&t.ID, &t.JobID, &t.Type, &t.Status, &t.Payload, &t.PageToken, &t.Error, &t.CreatedAt, &t.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		tasks = append(tasks, t)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return tasks, nil
 }
 
 func (s *Store) InsertJob(j Job) error {

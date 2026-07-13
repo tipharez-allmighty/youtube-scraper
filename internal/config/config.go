@@ -13,6 +13,7 @@ type Config struct {
 	StateFile     string `env:"STATE_FILE" envDefault:"storage.db"`
 	NumWorkers    int    `env:"NUM_WORKERS" envDefault:"5"`
 	BufferSize    int    `env:"BUFFER_SIZE" envDefault:"10"`
+	MaxRetries    int    `env:"MAX_RETRIES" envDefault:"3"`
 }
 
 func Load() (*Config, error) {
