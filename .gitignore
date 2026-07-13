@@ -1,6 +1,6 @@
 .env
-.db
-.db3
-.sqlite
-.sqlite3
+*.db
+*.db3
+*.sqlite
+*.sqlite3
 
