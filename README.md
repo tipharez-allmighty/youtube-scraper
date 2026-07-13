@@ -2,9 +2,7 @@
 
 A CLI tool that scrapes YouTube videos and comments based on search queries and stores everything locally in a SQLite database for later analysis.
 
-You give it a list of search queries, it fans out across YouTube's API — searching for videos, fetching comment threads, and pulling individual comments — all concurrently. Workers run in parallel pipelines connected by channels, so searching, thread fetching, and comment fetching all happen at the same time rather than waiting on each other. Every result gets persisted to SQLite as it comes in, so even if you stop mid-run you don't lose what was already collected.
-
-> **Note:** `resume` command is not implemented yet. Interrupted jobs cannot be continued from where they left off.
+You give it a list of search queries, it fans out across YouTube's API — searching for videos, fetching comment threads, and pulling individual comments — all concurrently. Workers run in parallel pipelines connected by channels, so searching, thread fetching, and comment fetching all happen at the same time rather than waiting on each other. Every result gets persisted to SQLite as it comes in, so even if you stop mid-run you don't lose what was already collected. If a job gets interrupted or a task fails, use `resume` to pick it back up from where it left off.
 
 ---
 
@@ -90,12 +88,15 @@ The `-s` flag on both `list` and `status` lets you point at a different SQLite f
 
 ---
 
-## Help
+### `resume` — retry failed tasks from a past job
 
 ```bash
-yt-scraper --help
-yt-scraper run --help
-yt-scraper jobs --help
-yt-scraper jobs list --help
-yt-scraper jobs status --help
+yt-scraper resume <job-id>
+yt-scraper resume <job-id> -s /path/to/storage.db
+```
+
+Looks up the failed tasks for `<job-id>` and re-runs them starting from the earliest failed stage (search → threads → comments), reusing the original job's settings (`max_pages`, `max_threads`, `max_comments`). API calls are retried with exponential backoff on failure, same as during `run`. If no failed tasks are found for the job, it exits with an error.
+
+The `-s` flag works the same as on `jobs list`/`jobs status`.
+
 ```
