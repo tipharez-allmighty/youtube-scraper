@@ -67,7 +67,7 @@ func (s *Store) SelectJobsStatus(jobID string) (*JobStatus, error) {
 	var j JobStatus
 	var input string
 	if err := row.Scan(
-		&j.ID, &input, &j.Total, &j.Failed, &j.Failed,
+		&j.ID, &input, &j.Total, &j.Running, &j.Failed,
 	); err != nil {
 		return nil, err
 	}

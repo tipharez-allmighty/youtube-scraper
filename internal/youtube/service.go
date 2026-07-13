@@ -77,7 +77,7 @@ func WithExpBackoff(fn NetworkRequestFunc, params url.Values, out YoutubeRespons
 			if apiErr, ok := errors.AsType[APIError](err); ok {
 				errCode := apiErr.ErrorData.Code
 				if errCode == 429 || errCode == 403 {
-					if retry == maxRetries-1 {
+					if retry == maxRetries-1 || apiErr.Reason() == CommentsDisabled {
 						return err
 					}
 					retryDelay := 1 << retry
@@ -175,7 +175,19 @@ func GetCommentThreads(c *Client, s *storage.Store, cfg *config.Config, tctx Thr
 	defer failTask(s, taskID, &err)
 
 	var commentThreadResponse CommentThreadResponse
-	if err = WithExpBackoff(c.get, params, &commentThreadResponse, cfg.MaxRetries); err != nil {
+	err = WithExpBackoff(c.get, params, &commentThreadResponse, cfg.MaxRetries)
+	if err != nil {
+		if apiErr, ok := errors.AsType[APIError](err); ok {
+			if apiErr.Reason() == CommentsDisabled {
+				slog.Info("Comments for video are disabled", "video_id", tctx.VideoID, "error", err)
+				if err = s.CompleteTask(taskID, func(tx *sql.Tx) error {
+					return nil
+				}); err != nil {
+					return "", fmt.Errorf(errCompleteTask, err)
+				}
+				return "", nil
+			}
+		}
 		return "", fmt.Errorf("fetching comment threads failed: %w", err)
 	}
 	slog.Info("Comment threads were found", "items", len(commentThreadResponse.Items))
