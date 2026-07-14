@@ -38,11 +38,7 @@ Alternatively, place a `.env` file in the directory you run the binary from and 
 yt-scraper run -f yaml < example-input.yaml
 ```
 
-YAML is the recommended way to define input — comments make each field
-self-explanatory, and unlike a one-off JSON string on the command line, a
-YAML file can be saved and kept around. Keep a folder of them (one per
-search you care about) and it's immediately clear what each one does
-without opening `run` --help or the source.
+YAML is the recommended way to define input due to its readability and self-explanatory syntax.
 
 Input is JSON or YAML, always piped in via stdin. Format defaults to `json`;
 pass `-f yaml` to send YAML instead.
