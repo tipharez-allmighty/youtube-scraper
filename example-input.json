@@ -1,0 +1,23 @@
+{
+  "queries": [
+    {
+      "text": "golang concurrency patterns",
+      "order": "relevance",
+      "published_after": "2024-01-01T00:00:00Z",
+      "published_before": "2026-01-01T00:00:00Z"
+    },
+    {
+      "text": "golang generics tutorial",
+      "order": "viewCount"
+    },
+    {
+      "text": "golang vs rust performance"
+    }
+  ],
+  "max_results_per_query": 10,
+  "state_file": "storage.db",
+  "max_pages": 3,
+  "max_threads": 2,
+  "max_comments": 5,
+  "order": "date"
+}

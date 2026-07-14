@@ -1,0 +1,47 @@
+# Example input for `yt-scraper run -f yaml example-input.yaml`
+# Every field the InputSchema supports is shown below.
+
+# REQUIRED. List of search queries to run. Must have at least one entry.
+queries:
+    # REQUIRED. The search text sent to YouTube.
+  - text: golang concurrency patterns
+    # OPTIONAL. Sort order for this query's results.
+    # One of: relevance, date, viewCount, rating. Defaults to YouTube's own default (relevance) if omitted.
+    order: relevance
+    # OPTIONAL. Only include videos published after this timestamp (RFC3339 format).
+    # Omit to not filter by a lower bound.
+    published_after: "2024-01-01T00:00:00Z"
+    # OPTIONAL. Only include videos published before this timestamp (RFC3339 format).
+    # Omit to not filter by an upper bound.
+    published_before: "2026-01-01T00:00:00Z"
+    # A query can also just be a bare `text` with nothing else set, e.g.:
+  - text: golang generics tutorial
+    order: viewCount
+  - text: golang vs rust performance
+
+# REQUIRED. How many video results to fetch per page, per query. Must be 1-50
+# (this is YouTube API's own per-page cap).
+max_results_per_query: 10
+
+# OPTIONAL. Path to the SQLite file this job's state/results are written to.
+# Overrides the STATE_FILE env var / --state-file default for this job only.
+# Omit to use the configured default (storage.db).
+state_file: storage.db
+
+# OPTIONAL. Max number of result pages to fetch per query (video search).
+# 0 (or omitted) means no limit - keep paging until YouTube stops returning
+# a next-page token.
+max_pages: 3
+
+# OPTIONAL. Max number of comment-thread pages to fetch per video.
+# 0 (or omitted) means no limit, same pagination rule as max_pages.
+max_threads: 2
+
+# OPTIONAL. Max number of reply pages to fetch per comment thread.
+# 0 (or omitted) means no limit, same pagination rule as max_pages.
+max_comments: 5
+
+# OPTIONAL. Top-level fallback sort order, same allowed values as a query's
+# own `order`. Only matters if you want a default without repeating it on
+# every query above.
+order: date

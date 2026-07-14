@@ -32,7 +32,20 @@ Alternatively, place a `.env` file in the directory you run the binary from and 
 
 ### `run` — start a scrape job
 
-Input is passed as JSON via stdin:
+**Intended usage:**
+
+```bash
+yt-scraper run -f yaml < example-input.yaml
+```
+
+YAML is the recommended way to define input — comments make each field
+self-explanatory, and unlike a one-off JSON string on the command line, a
+YAML file can be saved and kept around. Keep a folder of them (one per
+search you care about) and it's immediately clear what each one does
+without opening `run` --help or the source.
+
+Input is JSON or YAML, always piped in via stdin. Format defaults to `json`;
+pass `-f yaml` to send YAML instead.
 
 ```bash
 yt-scraper run <<< '{
@@ -47,11 +60,31 @@ yt-scraper run <<< '{
 }'
 ```
 
-Or from a file:
+See [`example-input.json`](./example-input.json) and
+[`example-input.yaml`](./example-input.yaml) for a full reference covering
+every field the input accepts, with comments on what's required vs optional.
+
+**Piping a file in, per shell:**
 
 ```bash
-yt-scraper run < input.json
+# bash / zsh (Linux, macOS, WSL)
+yt-scraper run -f json < example-input.json
+yt-scraper run -f yaml < example-input.yaml
 ```
+
+```powershell
+# PowerShell (Windows)
+Get-Content example-input.yaml | yt-scraper run -f yaml
+```
+
+```cmd
+:: cmd.exe (Windows)
+yt-scraper run -f yaml < example-input.yaml
+```
+
+`<` works the same across bash, zsh, and cmd.exe — it hands the file's
+contents to the program as stdin. PowerShell doesn't support `<` for
+redirection, so use `Get-Content file | yt-scraper run -f ...` instead.
 
 **Input fields:**
 

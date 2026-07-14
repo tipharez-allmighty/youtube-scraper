@@ -1,9 +1,7 @@
 package cli
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
 	"sync"
 
 	"tipharez-allmighty/youtube-scraper/internal/config"
@@ -15,16 +13,18 @@ import (
 	"github.com/google/uuid"
 )
 
-type RunCmd struct{}
+type RunCmd struct {
+	Format string `kong:"help='Input format (json or yaml)',enum='json,yaml',default='json',short='f'"`
+}
 
 func (r *RunCmd) Run(cfg *config.Config) error {
 	var payload input.InputSchema
-	if err := json.NewDecoder(os.Stdin).Decode(&payload); err != nil {
-		return fmt.Errorf("invalid input: %w", err)
+	if err := input.DecodePayload(r.Format, &payload); err != nil {
+		return fmt.Errorf("invalid input format: %w", err)
 	}
 	inputValidator := validator.New()
 	if err := inputValidator.Struct(payload); err != nil {
-		return fmt.Errorf("wrong input format: %w", err)
+		return fmt.Errorf("wrong input structure: %w", err)
 	}
 
 	store, err := getStore(cfg, payload.StateFile)
