@@ -12,11 +12,6 @@ type Store struct {
 	db *sql.DB
 }
 
-type JobFilter struct {
-	ID    *string
-	Limit *int
-}
-
 func NewStore(db *sql.DB) *Store {
 	return &Store{db}
 }
@@ -151,6 +146,13 @@ func (s *Store) InsertTask(t Task) error {
 func (s *Store) UpdateTaskStatus(id string, status Status, error *string) error {
 	_, err := s.db.Exec(
 		`UPDATE tasks SET status = ?, error = ? WHERE id = ?`, status, error, id,
+	)
+	return err
+}
+
+func (s *Store) FailRunningTasks(jobID string, error *string) error {
+	_, err := s.db.Exec(
+		`UPDATE tasks SET status = 'failed', error = ? WHERE job_id = ? AND status = 'running'`, error, jobID,
 	)
 	return err
 }

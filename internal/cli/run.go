@@ -1,9 +1,11 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"sync"
 
+	"tipharez-allmighty/youtube-scraper/internal/channel"
 	"tipharez-allmighty/youtube-scraper/internal/config"
 	"tipharez-allmighty/youtube-scraper/internal/input"
 	"tipharez-allmighty/youtube-scraper/internal/storage"
@@ -17,7 +19,7 @@ type RunCmd struct {
 	Format string `kong:"help='Input format (json or yaml)',enum='json,yaml',default='json',short='f'"`
 }
 
-func (r *RunCmd) Run(cfg *config.Config) error {
+func (r *RunCmd) Run(ctx context.Context, cfg *config.Config) error {
 	var payload input.InputSchema
 	if err := input.DecodePayload(r.Format, &payload); err != nil {
 		return fmt.Errorf("invalid input format: %w", err)
@@ -39,6 +41,7 @@ func (r *RunCmd) Run(cfg *config.Config) error {
 	if err := store.InsertJob(job); err != nil {
 		return fmt.Errorf("failed to create a job: %w", err)
 	}
+	defer failInterruptedTasks(ctx, store, job.ID)
 
 	client := youtube.New(cfg.YoutubeAPIKey)
 
@@ -56,8 +59,9 @@ func (r *RunCmd) Run(cfg *config.Config) error {
 	for range cfg.NumWorkers {
 		searchWg.Go(func() {
 			for query := range queryCh {
-				youtube.RunPagination(payload.MaxPages, "", func(pageToken string) (string, error) {
+				youtube.RunPagination(ctx, payload.MaxPages, "", func(pageToken string) (string, error) {
 					return youtube.GetVideos(
+						ctx,
 						client,
 						store,
 						cfg,
@@ -75,9 +79,10 @@ func (r *RunCmd) Run(cfg *config.Config) error {
 	for range cfg.NumWorkers {
 		commentThreadWg.Go(func() {
 			for threadCtx := range threadCh {
-				youtube.RunPagination(payload.MaxThreads, "", func(pageToken string) (string, error) {
+				youtube.RunPagination(ctx, payload.MaxThreads, "", func(pageToken string) (string, error) {
 					threadCtx.PageToken = pageToken
 					return youtube.GetCommentThreads(
+						ctx,
 						client,
 						store,
 						cfg,
@@ -91,7 +96,7 @@ func (r *RunCmd) Run(cfg *config.Config) error {
 	for range cfg.NumWorkers {
 		commentWg.Go(func() {
 			for commentCtx := range commentCh {
-				youtube.RunPagination(payload.MaxComments, "", func(pageToken string) (string, error) {
+				youtube.RunPagination(ctx, payload.MaxComments, "", func(pageToken string) (string, error) {
 					commentCtx.PageToken = pageToken
 					return youtube.GetComments(
 						client,
@@ -103,10 +108,13 @@ func (r *RunCmd) Run(cfg *config.Config) error {
 			}
 		})
 	}
-	go closeWhenDone(&searchWg, threadCh)
-	go closeWhenDone(&commentThreadWg, commentCh)
+	go channel.CloseWhenDone(&searchWg, threadCh)
+	go channel.CloseWhenDone(&commentThreadWg, commentCh)
 	for _, query := range payload.Queries {
-		queryCh <- query
+		if err := channel.TryChannel(ctx, queryCh, query); err != nil {
+			close(queryCh)
+			return err
+		}
 	}
 	close(queryCh)
 	commentWg.Wait()

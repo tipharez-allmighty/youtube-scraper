@@ -1,6 +1,7 @@
 package youtube
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -11,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"tipharez-allmighty/youtube-scraper/internal/channel"
 	"tipharez-allmighty/youtube-scraper/internal/config"
 	"tipharez-allmighty/youtube-scraper/internal/storage"
 
@@ -49,10 +51,15 @@ type CommentsContext struct {
 	CommentID string
 }
 
-func RunPagination(maxLimit int, startToken string, fn PaginationScraperFunc) {
+func RunPagination(ctx context.Context, maxLimit int, startToken string, fn PaginationScraperFunc) {
 	pageToken := startToken
 	pagesFetched := 0
 	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
 		nextPageToken, err := fn(pageToken)
 		if err != nil {
 			slog.Error("failed to get data", "error", err)
@@ -92,7 +99,7 @@ func WithExpBackoff(fn NetworkRequestFunc, params url.Values, out YoutubeRespons
 	return err
 }
 
-func GetVideos(c *Client, s *storage.Store, cfg *config.Config, vctx VideosContext, threadCh chan<- ThreadsContext) (nextPageToken string, err error) {
+func GetVideos(ctx context.Context, c *Client, s *storage.Store, cfg *config.Config, vctx VideosContext, threadCh chan<- ThreadsContext) (nextPageToken string, err error) {
 	params := url.Values{
 		"q":          {vctx.Query},
 		"type":       {"video"},
@@ -146,12 +153,14 @@ func GetVideos(c *Client, s *storage.Store, cfg *config.Config, vctx VideosConte
 			VideoID:   item.ID.VideoID,
 			PageToken: "",
 		}
-		threadCh <- threadContext
+		if err := channel.TryChannel(ctx, threadCh, threadContext); err != nil {
+			return "", err
+		}
 	}
 	return searchResponse.NextPageToken, nil
 }
 
-func GetCommentThreads(c *Client, s *storage.Store, cfg *config.Config, tctx ThreadsContext, commentCh chan<- CommentsContext) (nextPageToken string, err error) {
+func GetCommentThreads(ctx context.Context, c *Client, s *storage.Store, cfg *config.Config, tctx ThreadsContext, commentCh chan<- CommentsContext) (nextPageToken string, err error) {
 	params := url.Values{
 		"videoId":    {tctx.VideoID},
 		"part":       {"id,snippet,replies"},
@@ -232,7 +241,9 @@ func GetCommentThreads(c *Client, s *storage.Store, cfg *config.Config, tctx Thr
 			CommentID: commentID,
 			PageToken: "",
 		}
-		commentCh <- commentCtx
+		if err := channel.TryChannel(ctx, commentCh, commentCtx); err != nil {
+			return "", err
+		}
 	}
 	for _, commentThread := range topLevelReplies {
 		if err = processTopLevelReplies(s, tctx.JobID, tctx.MaxResults, commentThread); err != nil {
