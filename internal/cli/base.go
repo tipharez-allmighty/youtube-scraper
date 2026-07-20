@@ -2,16 +2,18 @@
 package cli
 
 import (
-	"sync"
+	"context"
+	"log/slog"
 
 	"tipharez-allmighty/youtube-scraper/internal/config"
 	"tipharez-allmighty/youtube-scraper/internal/storage"
 )
 
 type CLI struct {
-	Run    RunCmd    `cmd:"run" help:"Run a scraping job"`
-	Resume ResumeCmd `cmd:"resume" help:"Resume failed tasks"`
-	Jobs   JobsCmd   `cmd:"jobs" help:"List jobs"`
+	Run     RunCmd    `cmd:"run" help:"Run a scraping job"`
+	Resume  ResumeCmd `cmd:"resume" help:"Resume failed tasks"`
+	Jobs    JobsCmd   `cmd:"jobs" help:"List jobs"`
+	Verbose int       `help:"Increase verbosity." short:"v" type:"counter"`
 }
 
 func getStore(cfg *config.Config, stateFile string) (*storage.Store, error) {
@@ -27,7 +29,11 @@ func getStore(cfg *config.Config, stateFile string) (*storage.Store, error) {
 	return store, nil
 }
 
-func closeWhenDone[T any](wg *sync.WaitGroup, ch chan T) {
-	wg.Wait()
-	close(ch)
+func failInterruptedTasks(ctx context.Context, s *storage.Store, jobID string) {
+	if ctx.Err() != nil {
+		errMsg := ctx.Err().Error()
+		if err := s.FailRunningTasks(jobID, &errMsg); err != nil {
+			slog.Error("failed to mark running tasks as failed", "job_id", jobID, "error", err)
+		}
+	}
 }
