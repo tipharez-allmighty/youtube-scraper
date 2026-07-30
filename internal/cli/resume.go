@@ -42,7 +42,7 @@ func (r *ResumeCmd) Run(ctx context.Context, cfg *config.Config) error {
 	if len(tasks) == 0 {
 		return fmt.Errorf("no failed tasks found for this job")
 	}
-	client := youtube.New(cfg.YoutubeAPIKey)
+	client := youtube.New(cfg.YoutubeAPIKey, cfg.YoutubeBaseURL)
 
 	ft := failedTasks{}
 
