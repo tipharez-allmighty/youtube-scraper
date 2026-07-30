@@ -12,8 +12,9 @@ type SearchID struct {
 }
 
 type SearchSnippet struct {
-	Title       string `json:"title"`
-	Description string `json:"description"`
+	Title       string    `json:"title"`
+	Description string    `json:"description"`
+	PublishedAt time.Time `json:"publishedAt"`
 }
 
 type SearchItem struct {

@@ -55,6 +55,7 @@ type Video struct {
 	QueryText   string
 	Title       string
 	Description string
+	PublishedAt time.Time
 	CreatedAt   time.Time
 }
 
@@ -79,3 +80,4 @@ type Comment struct {
 	CommentBase
 	ThreadID string
 }
+

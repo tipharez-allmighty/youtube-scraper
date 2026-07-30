@@ -33,6 +33,7 @@ func (r *RunCmd) Run(ctx context.Context, cfg *config.Config) error {
 	if err != nil {
 		return fmt.Errorf("failed to load storage: %v", err)
 	}
+	defer store.Close()
 	jobID, err := uuid.NewV7()
 	if err != nil {
 		return fmt.Errorf("failed to generate uuid7 for new job: %w", err)

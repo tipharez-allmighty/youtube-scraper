@@ -3,4 +3,4 @@
 *.db3
 *.sqlite
 *.sqlite3
-
+/data/

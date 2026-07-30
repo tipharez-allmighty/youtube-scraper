@@ -128,4 +128,22 @@ Looks up the failed tasks for `<job-id>` and re-runs them starting from the earl
 
 The `-s` flag works the same as on `jobs list`/`jobs status`.
 
+---
+
+### `export` — export job data to CSV or SQLite
+
+```bash
+yt-scraper export <job-id>
+yt-scraper export <job-id> -f sqlite
+yt-scraper export <job-id> -p ./out/ -s /path/to/storage.db
 ```
+
+Writes videos, comment threads, and comments for `<job-id>` under `<path>/<job-id>/`. Defaults to `-f csv`, producing `videos.csv`, `threads.csv`, and `comments.csv`. Pass `-f sqlite` to instead export a standalone SQLite file containing only that job's data.
+
+**Flags:**
+
+| Flag | Description |
+|---|---|
+| `-p` | Output directory (default: `./data/`) |
+| `-f` | Output format: `csv` or `sqlite` (default: `csv`) |
+| `-s` | Path to state file, same as on `jobs`/`resume` |
