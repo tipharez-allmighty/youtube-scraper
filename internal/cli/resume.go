@@ -29,6 +29,7 @@ func (r *ResumeCmd) Run(ctx context.Context, cfg *config.Config) error {
 	if err != nil {
 		return fmt.Errorf("failed to load storage: %w", err)
 	}
+	defer store.Close()
 	defer failInterruptedTasks(ctx, store, r.JobID)
 	jobInput, err := store.SelectJobInput(r.JobID)
 	if err != nil {

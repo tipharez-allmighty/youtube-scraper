@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS videos (
     query_text  TEXT NOT NULL,
     title       TEXT NOT NULL,
     description TEXT NOT NULL,
+    published_at DATETIME NOT NULL,
     created_at  DATETIME NOT NULL DEFAULT (datetime('now')),
 
 		PRIMARY KEY (id, job_id)

@@ -19,7 +19,7 @@ var schemas = []string{
 
 func Init(path string) (*sql.DB, error) {
 	schema := strings.Join(schemas, "\n")
-	db, err := sql.Open("sqlite3", path+"?-journal_mode=WAL&_foreign_keys=on")
+	db, err := sql.Open("sqlite3", path+"?_journal_mode=WAL&_foreign_keys=on")
 	if err != nil {
 		return nil, err
 	}
@@ -28,3 +28,4 @@ func Init(path string) (*sql.DB, error) {
 	}
 	return db, nil
 }
+

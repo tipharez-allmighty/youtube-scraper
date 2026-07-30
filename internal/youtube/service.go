@@ -136,6 +136,7 @@ func GetVideos(ctx context.Context, c *Client, s *storage.Store, cfg *config.Con
 			QueryText:   vctx.Query,
 			Title:       item.Snippet.Title,
 			Description: item.Snippet.Description,
+			PublishedAt: item.Snippet.PublishedAt,
 		})
 	}
 	if err = s.CompleteTask(taskID, func(tx *sql.Tx) error {

@@ -12,6 +12,10 @@ type Store struct {
 	db *sql.DB
 }
 
+func (s *Store) Close() {
+	s.db.Close()
+}
+
 func NewStore(db *sql.DB) *Store {
 	return &Store{db}
 }
@@ -119,6 +123,78 @@ func (s *Store) SelectFailedTasks(jobID string) ([]Task, error) {
 	return tasks, nil
 }
 
+func (s *Store) SelectVideos(jobID string, limit int, offset int) ([]Video, int, error) {
+	rows, err := s.db.Query(`
+			SELECT * FROM videos WHERE job_id = ? ORDER BY published_at ASC 
+		LIMIT ?
+		OFFSET ?`, jobID, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+	var videos []Video
+	for rows.Next() {
+		var v Video
+		if err := rows.Scan(
+			&v.ID, &v.JobID, &v.QueryText, &v.Title, &v.Description, &v.PublishedAt, &v.CreatedAt); err != nil {
+			return nil, 0, err
+		}
+		videos = append(videos, v)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+	return videos, len(videos) + offset, nil
+}
+
+func (s *Store) SelectThreads(jobID string, limit int, offset int) ([]CommentThread, int, error) {
+	rows, err := s.db.Query(`
+		SELECT * FROM threads WHERE job_id = ? ORDER BY published_at ASC
+		LIMIT ?
+		OFFSET ?`, jobID, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+	var threads []CommentThread
+	for rows.Next() {
+		var t CommentThread
+		if err := rows.Scan(
+			&t.ID, &t.JobID, &t.VideoID, &t.Author, &t.TextDisplay, &t.TextOriginal, &t.TotalReplyCount, &t.LikeCount, &t.PublishedAt, &t.CreatedAt); err != nil {
+			return nil, 0, err
+		}
+		threads = append(threads, t)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+	return threads, len(threads) + offset, nil
+}
+
+func (s *Store) SelectComments(jobID string, limit int, offset int) ([]Comment, int, error) {
+	rows, err := s.db.Query(`
+		SELECT * FROM comments WHERE job_id = ? ORDER BY published_at ASC
+		LIMIT ?
+		OFFSET ?`, jobID, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+	var comments []Comment
+	for rows.Next() {
+		var c Comment
+		if err := rows.Scan(
+			&c.ID, &c.JobID, &c.ThreadID, &c.Author, &c.TextDisplay, &c.TextOriginal, &c.LikeCount, &c.PublishedAt, &c.CreatedAt); err != nil {
+			return nil, 0, err
+		}
+		comments = append(comments, c)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+	return comments, len(comments) + offset, nil
+}
+
 func (s *Store) InsertJob(j Job) error {
 	input, err := json.Marshal(j.Input)
 	if err != nil {
@@ -177,8 +253,8 @@ func (s *Store) CompleteTask(taskID string, insertFn func(*sql.Tx) error) error 
 func InsertVideos(tx *sql.Tx, videos []Video) error {
 	for _, v := range videos {
 		if _, err := tx.Exec(
-			`INSERT OR IGNORE INTO videos (id, job_id, query_text, title, description)
-			VALUES (?,?,?,?,?)`, v.ID, v.JobID, v.QueryText, v.Title, v.Description); err != nil {
+			`INSERT OR IGNORE INTO videos (id, job_id, query_text, title, description, published_at)
+			VALUES (?,?,?,?,?,?)`, v.ID, v.JobID, v.QueryText, v.Title, v.Description, v.PublishedAt); err != nil {
 			return err
 		}
 	}
@@ -203,4 +279,32 @@ func InsertComments(tx *sql.Tx, threads []Comment) error {
 		}
 	}
 	return nil
+}
+
+func (s *Store) CleanDataByJobID(jobID string) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	delStmts := []string{
+		`DELETE FROM comments WHERE job_id != ?;`,
+		`DELETE FROM threads WHERE job_id != ?;`,
+		`DELETE FROM videos WHERE job_id != ?;`,
+	}
+	for _, stmt := range delStmts {
+		if _, err := tx.Exec(stmt, jobID); err != nil {
+			return err
+		}
+	}
+	dropStmts := []string{
+		`DROP TABLE IF EXISTS tasks;`,
+		`DROP TABLE IF EXISTS jobs;`,
+	}
+	for _, stmt := range dropStmts {
+		if _, err := tx.Exec(stmt); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }

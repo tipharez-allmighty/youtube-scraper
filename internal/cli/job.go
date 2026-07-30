@@ -29,6 +29,7 @@ func (j *JobsListCmd) Run(cfg *config.Config) error {
 	if err != nil {
 		return fmt.Errorf("failed to load storage: %w", err)
 	}
+	defer store.Close()
 	jobs, err := store.SelectJobs(j.Limit)
 	if err != nil {
 		return err
@@ -50,6 +51,7 @@ func (j *JobsStatusCmd) Run(cfg *config.Config) error {
 	if err != nil {
 		return fmt.Errorf("failed to load storage: %w", err)
 	}
+	defer store.Close()
 	jobStatus, err := store.SelectJobsStatus(j.JobID)
 	if err != nil {
 		return err
