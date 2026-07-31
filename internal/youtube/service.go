@@ -2,7 +2,6 @@ package youtube
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -99,7 +98,17 @@ func WithExpBackoff(fn NetworkRequestFunc, params url.Values, out YoutubeRespons
 	return err
 }
 
-func GetVideos(ctx context.Context, c *Client, s *storage.Store, cfg *config.Config, vctx VideosContext, threadCh chan<- ThreadsContext) (nextPageToken string, err error) {
+type DataStore interface {
+	InsertTask(t storage.Task) error
+	UpdateTaskStatus(id string, status storage.Status, error *string) error
+	CompleteTask(taskID string, insertFn func(storage.TxExecutable) error) error
+}
+
+type YoutubeClient interface {
+	get(params url.Values, out YoutubeResponse) error
+}
+
+func GetVideos(ctx context.Context, c YoutubeClient, s DataStore, cfg *config.Config, vctx VideosContext, threadCh chan<- ThreadsContext) (nextPageToken string, err error) {
 	params := url.Values{
 		"q":          {vctx.Query},
 		"type":       {"video"},
@@ -139,7 +148,7 @@ func GetVideos(ctx context.Context, c *Client, s *storage.Store, cfg *config.Con
 			PublishedAt: item.Snippet.PublishedAt,
 		})
 	}
-	if err = s.CompleteTask(taskID, func(tx *sql.Tx) error {
+	if err = s.CompleteTask(taskID, func(tx storage.TxExecutable) error {
 		return storage.InsertVideos(tx, videos)
 	}); err != nil {
 		return "", fmt.Errorf(errCompleteTask, err)
@@ -161,7 +170,7 @@ func GetVideos(ctx context.Context, c *Client, s *storage.Store, cfg *config.Con
 	return searchResponse.NextPageToken, nil
 }
 
-func GetCommentThreads(ctx context.Context, c *Client, s *storage.Store, cfg *config.Config, tctx ThreadsContext, commentCh chan<- CommentsContext) (nextPageToken string, err error) {
+func GetCommentThreads(ctx context.Context, c YoutubeClient, s DataStore, cfg *config.Config, tctx ThreadsContext, commentCh chan<- CommentsContext) (nextPageToken string, err error) {
 	params := url.Values{
 		"videoId":    {tctx.VideoID},
 		"part":       {"id,snippet,replies"},
@@ -190,7 +199,7 @@ func GetCommentThreads(ctx context.Context, c *Client, s *storage.Store, cfg *co
 		if apiErr, ok := errors.AsType[APIError](err); ok {
 			if apiErr.Reason() == CommentsDisabled {
 				slog.Info("Comments for video are disabled", "video_id", tctx.VideoID, "error", err)
-				if err = s.CompleteTask(taskID, func(tx *sql.Tx) error {
+				if err = s.CompleteTask(taskID, func(tx storage.TxExecutable) error {
 					return nil
 				}); err != nil {
 					return "", fmt.Errorf(errCompleteTask, err)
@@ -231,7 +240,7 @@ func GetCommentThreads(ctx context.Context, c *Client, s *storage.Store, cfg *co
 			topLevelReplies = append(topLevelReplies, item)
 		}
 	}
-	if err = s.CompleteTask(taskID, func(tx *sql.Tx) error {
+	if err = s.CompleteTask(taskID, func(tx storage.TxExecutable) error {
 		return storage.InsertThreads(tx, threads)
 	}); err != nil {
 		return "", fmt.Errorf(errCompleteTask, err)
@@ -255,7 +264,7 @@ func GetCommentThreads(ctx context.Context, c *Client, s *storage.Store, cfg *co
 	return commentThreadResponse.NextPageToken, nil
 }
 
-func GetComments(c *Client, s *storage.Store, cfg *config.Config, cctx CommentsContext) (nextPageToken string, err error) {
+func GetComments(c YoutubeClient, s DataStore, cfg *config.Config, cctx CommentsContext) (nextPageToken string, err error) {
 	params := url.Values{
 		"parentId":   {cctx.CommentID},
 		"part":       {"id,snippet"},
@@ -297,7 +306,7 @@ func GetComments(c *Client, s *storage.Store, cfg *config.Config, cctx CommentsC
 			ThreadID: item.Snippet.ParentID,
 		})
 	}
-	if err = s.CompleteTask(taskID, func(tx *sql.Tx) error {
+	if err = s.CompleteTask(taskID, func(tx storage.TxExecutable) error {
 		return storage.InsertComments(tx, comments)
 	}); err != nil {
 		return "", fmt.Errorf(errCompleteTask, err)
@@ -305,7 +314,7 @@ func GetComments(c *Client, s *storage.Store, cfg *config.Config, cctx CommentsC
 	return commentResponse.NextPageToken, nil
 }
 
-func processTopLevelReplies(s *storage.Store, jobID string, maxResults int, item CommentThread) error {
+func processTopLevelReplies(s DataStore, jobID string, maxResults int, item CommentThread) error {
 	cctx := CommentsContext{
 		Context: Context{
 			JobID:      jobID,
@@ -340,7 +349,7 @@ func processTopLevelReplies(s *storage.Store, jobID string, maxResults int, item
 		)
 		slog.Info("Fetching comment", "comment", comment)
 	}
-	if err = s.CompleteTask(replyTaskID, func(tx *sql.Tx) error {
+	if err = s.CompleteTask(replyTaskID, func(tx storage.TxExecutable) error {
 		return storage.InsertComments(tx, comments)
 	}); err != nil {
 		return fmt.Errorf(errCompleteTask, err)
@@ -352,7 +361,7 @@ func getDeterministicID(parts ...string) string {
 	return uuid.NewMD5(uuid.Nil, []byte(strings.Join(parts, ":"))).String()
 }
 
-func failTask(s *storage.Store, taskID string, errPtr *error) {
+func failTask(s DataStore, taskID string, errPtr *error) {
 	if errPtr == nil || *errPtr == nil {
 		return
 	}
