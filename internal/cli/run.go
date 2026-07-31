@@ -44,7 +44,7 @@ func (r *RunCmd) Run(ctx context.Context, cfg *config.Config) error {
 	}
 	defer failInterruptedTasks(ctx, store, job.ID)
 
-	client := youtube.New(cfg.YoutubeAPIKey)
+	client := youtube.New(cfg.YoutubeAPIKey, cfg.YoutubeBaseURL)
 
 	queryCh := make(chan input.Query, cfg.BufferSize)
 	threadCh := make(chan youtube.ThreadsContext, cfg.BufferSize)

@@ -233,7 +233,11 @@ func (s *Store) FailRunningTasks(jobID string, error *string) error {
 	return err
 }
 
-func (s *Store) CompleteTask(taskID string, insertFn func(*sql.Tx) error) error {
+type TxExecutable interface {
+	Exec(query string, args ...any) (sql.Result, error)
+}
+
+func (s *Store) CompleteTask(taskID string, insertFn func(TxExecutable) error) error {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return err
@@ -250,7 +254,7 @@ func (s *Store) CompleteTask(taskID string, insertFn func(*sql.Tx) error) error 
 	return tx.Commit()
 }
 
-func InsertVideos(tx *sql.Tx, videos []Video) error {
+func InsertVideos(tx TxExecutable, videos []Video) error {
 	for _, v := range videos {
 		if _, err := tx.Exec(
 			`INSERT OR IGNORE INTO videos (id, job_id, query_text, title, description, published_at)
@@ -261,7 +265,7 @@ func InsertVideos(tx *sql.Tx, videos []Video) error {
 	return nil
 }
 
-func InsertThreads(tx *sql.Tx, threads []CommentThread) error {
+func InsertThreads(tx TxExecutable, threads []CommentThread) error {
 	for _, t := range threads {
 		if _, err := tx.Exec(
 			`INSERT OR IGNORE INTO threads (id, video_id, job_id, author, text_display, text_original, like_count, total_reply_count, published_at) VALUES (?,?,?,?,?,?,?,?,?)`, t.ID, t.VideoID, t.JobID, t.Author, t.TextDisplay, t.TextOriginal, t.LikeCount, t.TotalReplyCount, t.PublishedAt); err != nil {
@@ -271,7 +275,7 @@ func InsertThreads(tx *sql.Tx, threads []CommentThread) error {
 	return nil
 }
 
-func InsertComments(tx *sql.Tx, threads []Comment) error {
+func InsertComments(tx TxExecutable, threads []Comment) error {
 	for _, t := range threads {
 		if _, err := tx.Exec(
 			`INSERT OR IGNORE INTO comments (id, thread_id, job_id, author, text_display, text_original, like_count, published_at) VALUES (?,?,?,?,?,?,?,?)`, t.ID, t.ThreadID, t.JobID, t.Author, t.TextDisplay, t.TextOriginal, t.LikeCount, t.PublishedAt); err != nil {

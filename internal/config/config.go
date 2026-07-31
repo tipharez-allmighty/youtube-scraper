@@ -9,12 +9,13 @@ import (
 )
 
 type Config struct {
-	YoutubeAPIKey string `env:"YOUTUBE_API_KEY"`
-	StateFile     string `env:"STATE_FILE" envDefault:"storage.db"`
-	NumWorkers    int    `env:"NUM_WORKERS" envDefault:"5"`
-	BufferSize    int    `env:"BUFFER_SIZE" envDefault:"10"`
-	MaxRetries    int    `env:"MAX_RETRIES" envDefault:"3"`
-	LimitRows     int    `env:"LIMIT_ROWS" envDefault:"5000"`
+	YoutubeAPIKey  string `env:"YOUTUBE_API_KEY"`
+	YoutubeBaseURL string `env:"YOUTUBE_BASE_URL" envDefault:"https://www.googleapis.com/youtube/v3/"`
+	StateFile      string `env:"STATE_FILE" envDefault:"storage.db"`
+	NumWorkers     int    `env:"NUM_WORKERS" envDefault:"5"`
+	BufferSize     int    `env:"BUFFER_SIZE" envDefault:"10"`
+	MaxRetries     int    `env:"MAX_RETRIES" envDefault:"3"`
+	LimitRows      int    `env:"LIMIT_ROWS" envDefault:"5000"`
 }
 
 func Load() (*Config, error) {

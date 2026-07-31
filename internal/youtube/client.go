@@ -9,21 +9,18 @@ import (
 	"net/url"
 )
 
-const (
-	BaseURL = "https://www.googleapis.com/youtube/v3/"
-)
-
 type Client struct {
-	apiKey string
+	apiKey  string
+	baseURL string
 }
 
-func New(apiKey string) *Client {
-	return &Client{apiKey: apiKey}
+func New(apiKey, baseURL string) *Client {
+	return &Client{apiKey: apiKey, baseURL: baseURL}
 }
 
 func (c *Client) get(params url.Values, out YoutubeResponse) error {
 	params.Set("key", c.apiKey)
-	reqURL := BaseURL + out.URL() + "?" + params.Encode()
+	reqURL := c.baseURL + out.URL() + "?" + params.Encode()
 	resp, err := http.Get(reqURL)
 	if err != nil {
 		return fmt.Errorf("failed to make request: %w", err)
