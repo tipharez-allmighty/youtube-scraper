@@ -67,9 +67,12 @@ func (r *RunCmd) Run(ctx context.Context, cfg *config.Config) error {
 						store,
 						cfg,
 						youtube.VideosContext{
-							Context:   queryContext,
-							PageToken: pageToken,
-							Query:     query.Text,
+							Context:         queryContext,
+							PageToken:       pageToken,
+							Query:           query.Text,
+							Order:           query.Order,
+							PublishedBefore: query.PublishedBefore,
+							PublishedAfter:  query.PublishedAfter,
 						},
 						threadCh,
 					)

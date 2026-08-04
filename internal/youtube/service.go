@@ -13,6 +13,7 @@ import (
 
 	"tipharez-allmighty/youtube-scraper/internal/channel"
 	"tipharez-allmighty/youtube-scraper/internal/config"
+	"tipharez-allmighty/youtube-scraper/internal/input"
 	"tipharez-allmighty/youtube-scraper/internal/storage"
 
 	"github.com/google/uuid"
@@ -34,8 +35,11 @@ type Context struct {
 }
 type VideosContext struct {
 	Context
-	PageToken string
-	Query     string
+	PageToken       string
+	Query           string
+	Order           input.Order
+	PublishedBefore time.Time
+	PublishedAfter  time.Time
 }
 
 type ThreadsContext struct {
@@ -115,6 +119,17 @@ func GetVideos(ctx context.Context, c YoutubeClient, s DataStore, cfg *config.Co
 		"part":       {"id,snippet"},
 		"maxResults": {fmt.Sprint(vctx.MaxResults)},
 	}
+	if vctx.Order != "" {
+		params.Set("order", string(vctx.Order))
+	}
+	if !vctx.PublishedBefore.IsZero() {
+		params.Set("publishedBefore", vctx.PublishedBefore.Format(time.RFC3339))
+	}
+
+	if !vctx.PublishedAfter.IsZero() {
+		params.Set("publishedAfter", vctx.PublishedAfter.Format(time.RFC3339))
+	}
+
 	var pageTokenPtr *string
 	if vctx.PageToken != "" {
 		pageTokenPtr = &vctx.PageToken
