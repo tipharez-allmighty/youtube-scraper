@@ -41,7 +41,3 @@ max_threads: 2
 # 0 (or omitted) means no limit, same pagination rule as max_pages.
 max_comments: 5
 
-# OPTIONAL. Top-level fallback sort order, same allowed values as a query's
-# own `order`. Only matters if you want a default without repeating it on
-# every query above.
-order: date

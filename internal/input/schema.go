@@ -26,5 +26,4 @@ type InputSchema struct {
 	MaxPages           int     `json:"max_pages" yaml:"max_pages" validate:"min=0"`
 	MaxThreads         int     `json:"max_threads" yaml:"max_threads" validate:"min=0"`
 	MaxComments        int     `json:"max_comments" yaml:"max_comments" validate:"min=0"`
-	Order              Order   `json:"order" yaml:"order" validate:"omitempty,oneof=relevance date viewCount rating"`
 }

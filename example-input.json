@@ -18,6 +18,5 @@
   "state_file": "storage.db",
   "max_pages": 3,
   "max_threads": 2,
-  "max_comments": 5,
-  "order": "date"
+  "max_comments": 5
 }
