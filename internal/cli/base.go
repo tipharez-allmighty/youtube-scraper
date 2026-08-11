@@ -30,11 +30,17 @@ func getStore(cfg *config.Config, stateFile string) (*storage.Store, error) {
 	return store, nil
 }
 
-func failInterruptedTasks(ctx context.Context, s *storage.Store, jobID string) {
-	if ctx.Err() != nil {
-		errMsg := ctx.Err().Error()
-		if err := s.FailRunningTasks(jobID, &errMsg); err != nil {
-			slog.Error("failed to mark running tasks as failed", "job_id", jobID, "error", err)
-		}
+func failInterruptedTasks(ctx context.Context, s *storage.Store, jobID string, runErr error) {
+	var errMsg string
+	switch {
+	case ctx.Err() != nil:
+		errMsg = ctx.Err().Error()
+	case runErr != nil:
+		errMsg = runErr.Error()
+	default:
+		return
+	}
+	if err := s.FailRunningTasks(jobID, &errMsg); err != nil {
+		slog.Error("failed to mark running tasks as failed", "job_id", jobID, "error", err)
 	}
 }

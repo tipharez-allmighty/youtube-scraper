@@ -24,13 +24,13 @@ type failedTasks struct {
 	commentTasks []storage.Task
 }
 
-func (r *ResumeCmd) Run(ctx context.Context, cfg *config.Config) error {
+func (r *ResumeCmd) Run(ctx context.Context, cfg *config.Config) (err error) {
 	store, err := getStore(cfg, r.StateFile)
 	if err != nil {
 		return fmt.Errorf("failed to load storage: %w", err)
 	}
 	defer store.Close()
-	defer failInterruptedTasks(ctx, store, r.JobID)
+	defer func() { failInterruptedTasks(ctx, store, r.JobID, err) }()
 	jobInput, err := store.SelectJobInput(r.JobID)
 	if err != nil {
 		return fmt.Errorf("failed to load job's input: %w", err)

@@ -19,7 +19,7 @@ type RunCmd struct {
 	Format string `kong:"help='Input format (json or yaml)',enum='json,yaml',default='json',short='f'"`
 }
 
-func (r *RunCmd) Run(ctx context.Context, cfg *config.Config) error {
+func (r *RunCmd) Run(ctx context.Context, cfg *config.Config) (err error) {
 	var payload input.InputSchema
 	if err := input.DecodePayload(r.Format, &payload); err != nil {
 		return fmt.Errorf("invalid input format: %w", err)
@@ -42,7 +42,7 @@ func (r *RunCmd) Run(ctx context.Context, cfg *config.Config) error {
 	if err := store.InsertJob(job); err != nil {
 		return fmt.Errorf("failed to create a job: %w", err)
 	}
-	defer failInterruptedTasks(ctx, store, job.ID)
+	defer func() { failInterruptedTasks(ctx, store, job.ID, err) }()
 
 	client := youtube.New(cfg.YoutubeAPIKey, cfg.YoutubeBaseURL)
 
