@@ -29,7 +29,7 @@ func ExportSQLite(cfg *config.Config, jobID, file, path string) (err error) {
 	if dbPath == "" {
 		dbPath = cfg.StateFile
 	}
-	dstPath := filepath.Join(path, dbPath)
+	dstPath := filepath.Join(path, filepath.Base(dbPath))
 	if err = copyDBFile(dbPath, dstPath); err != nil {
 		return fmt.Errorf("failed to create sqlite export file: %w", err)
 	}
