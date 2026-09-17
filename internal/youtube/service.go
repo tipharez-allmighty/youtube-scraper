@@ -9,6 +9,7 @@ import (
 	"math/rand/v2"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"tipharez-allmighty/youtube-scraper/internal/channel"
@@ -100,6 +101,319 @@ func WithExpBackoff(fn NetworkRequestFunc, params url.Values, out YoutubeRespons
 		return err
 	}
 	return err
+}
+
+func RunSearch(ctx context.Context, cfg *config.Config, client YoutubeClient, store *storage.Store, job storage.Job, payload input.InputSchema) error {
+	queryCh := make(chan input.Query, cfg.BufferSize)
+	threadCh := make(chan ThreadsContext, cfg.BufferSize)
+	commentCh := make(chan CommentsContext, cfg.BufferSize)
+	var searchWg sync.WaitGroup
+	var commentThreadWg sync.WaitGroup
+	var commentWg sync.WaitGroup
+
+	queryContext := Context{
+		JobID:      job.ID,
+		MaxResults: payload.MaxResultsPerQuery,
+	}
+	for range cfg.NumWorkers {
+		searchWg.Go(func() {
+			for query := range queryCh {
+				RunPagination(ctx, payload.MaxPages, "", func(pageToken string) (string, error) {
+					return GetVideos(
+						ctx,
+						client,
+						store,
+						cfg,
+						VideosContext{
+							Context:         queryContext,
+							PageToken:       pageToken,
+							Query:           query.Text,
+							Order:           query.Order,
+							PublishedBefore: query.PublishedBefore,
+							PublishedAfter:  query.PublishedAfter,
+						},
+						threadCh,
+					)
+				})
+			}
+		})
+	}
+	for range cfg.NumWorkers {
+		commentThreadWg.Go(func() {
+			for threadCtx := range threadCh {
+				RunPagination(ctx, payload.MaxThreads, "", func(pageToken string) (string, error) {
+					threadCtx.PageToken = pageToken
+					return GetCommentThreads(
+						ctx,
+						client,
+						store,
+						cfg,
+						threadCtx,
+						commentCh,
+					)
+				})
+			}
+		})
+	}
+	for range cfg.NumWorkers {
+		commentWg.Go(func() {
+			for commentCtx := range commentCh {
+				RunPagination(ctx, payload.MaxComments, "", func(pageToken string) (string, error) {
+					commentCtx.PageToken = pageToken
+					return GetComments(
+						client,
+						store,
+						cfg,
+						commentCtx,
+					)
+				})
+			}
+		})
+	}
+	go channel.CloseWhenDone(&searchWg, threadCh)
+	go channel.CloseWhenDone(&commentThreadWg, commentCh)
+	for _, query := range payload.Queries {
+		if err := channel.TryChannel(ctx, queryCh, query); err != nil {
+			close(queryCh)
+			return err
+		}
+	}
+	close(queryCh)
+	commentWg.Wait()
+	return nil
+}
+
+type failedTasks struct {
+	searchTasks  []storage.Task
+	threadTasks  []storage.Task
+	commentTasks []storage.Task
+}
+
+func ResumeSearchTasks(ctx context.Context, cfg *config.Config, client YoutubeClient, store *storage.Store, jobInput *input.InputSchema, tasks []storage.Task) error {
+	ft := failedTasks{}
+	for _, task := range tasks {
+		switch task.Type {
+		case storage.Search:
+			ft.searchTasks = append(ft.searchTasks, task)
+		case storage.Thread:
+			ft.threadTasks = append(ft.threadTasks, task)
+		case storage.Reply:
+			ft.commentTasks = append(ft.commentTasks, task)
+		}
+	}
+	switch {
+	case len(ft.searchTasks) > 0:
+		if err := resumeFromSearch(ctx, client, store, ft, jobInput, cfg); err != nil {
+			return fmt.Errorf("failed to resume tasks starting from video search: %w", err)
+		}
+	case len(ft.threadTasks) > 0:
+		if err := resumeFromThreads(ctx, client, store, ft.threadTasks, ft.commentTasks, jobInput, cfg); err != nil {
+			return fmt.Errorf("failed to resume task starting from threads: %w", err)
+		}
+	case len(ft.commentTasks) > 0:
+		if err := resumeFromComments(ctx, client, store, ft.commentTasks, jobInput, cfg); err != nil {
+			return fmt.Errorf("failed to resume task starting from comments: %w", err)
+		}
+	}
+	return nil
+}
+
+func resumeFromSearch(ctx context.Context, client YoutubeClient, store *storage.Store, ft failedTasks, jobInput *input.InputSchema, cfg *config.Config) error {
+	queryCh := make(chan VideosContext, cfg.BufferSize)
+	threadCh := make(chan ThreadsContext, cfg.BufferSize)
+	commentCh := make(chan CommentsContext, cfg.BufferSize)
+	var searchWg sync.WaitGroup
+	var threadWg sync.WaitGroup
+	var commentWg sync.WaitGroup
+
+	for range cfg.NumWorkers {
+		searchWg.Go(func() {
+			for queryCtx := range queryCh {
+				RunPagination(ctx, jobInput.MaxPages, queryCtx.PageToken, func(pageToken string) (string, error) {
+					queryCtx.PageToken = pageToken
+					return GetVideos(
+						ctx,
+						client,
+						store,
+						cfg,
+						queryCtx,
+						threadCh,
+					)
+				})
+			}
+		})
+	}
+	for range cfg.NumWorkers {
+		threadWg.Go(func() {
+			for threadCtx := range threadCh {
+				RunPagination(ctx, jobInput.MaxPages, threadCtx.PageToken, func(pageToken string) (string, error) {
+					threadCtx.PageToken = pageToken
+					return GetCommentThreads(
+						ctx,
+						client,
+						store,
+						cfg,
+						threadCtx,
+						commentCh,
+					)
+				})
+			}
+		})
+	}
+	for range cfg.NumWorkers {
+		commentWg.Go(func() {
+			for commentCtx := range commentCh {
+				RunPagination(ctx, jobInput.MaxComments, commentCtx.PageToken, func(pageToken string) (string, error) {
+					commentCtx.PageToken = pageToken
+					return GetComments(
+						client,
+						store,
+						cfg,
+						commentCtx,
+					)
+				})
+			}
+		})
+	}
+
+	for _, task := range ft.searchTasks {
+		var queryCtx VideosContext
+		err := json.Unmarshal([]byte(task.Payload), &queryCtx)
+		if err != nil {
+			return fmt.Errorf("failed to unmarshal video search context payload: %w", err)
+		}
+		if err := channel.TryChannel(ctx, queryCh, queryCtx); err != nil {
+			close(queryCh)
+			return ctx.Err()
+		}
+	}
+	close(queryCh)
+	for _, task := range ft.threadTasks {
+		var threadCtx ThreadsContext
+		err := json.Unmarshal([]byte(task.Payload), &threadCtx)
+		if err != nil {
+			return fmt.Errorf("failed to umarshal thread context payload: %w", err)
+		}
+		if err := channel.TryChannel(ctx, threadCh, threadCtx); err != nil {
+			return err
+		}
+	}
+
+	for _, task := range ft.commentTasks {
+		var commentCtx CommentsContext
+		err := json.Unmarshal([]byte(task.Payload), &commentCtx)
+		if err != nil {
+			return fmt.Errorf("failed to umarshal comment context payload: %w", err)
+		}
+		if err := channel.TryChannel(ctx, commentCh, commentCtx); err != nil {
+			return err
+		}
+	}
+	go channel.CloseWhenDone(&searchWg, threadCh)
+	go channel.CloseWhenDone(&threadWg, commentCh)
+	commentWg.Wait()
+	return nil
+}
+
+func resumeFromThreads(ctx context.Context, client YoutubeClient, store *storage.Store, threadTasks []storage.Task, commentTasks []storage.Task, jobInput *input.InputSchema, cfg *config.Config) error {
+	threadCh := make(chan ThreadsContext, cfg.BufferSize)
+	commentCh := make(chan CommentsContext, cfg.BufferSize)
+	var threadWg sync.WaitGroup
+	var commentWg sync.WaitGroup
+
+	for range cfg.NumWorkers {
+		threadWg.Go(func() {
+			for threadCtx := range threadCh {
+				RunPagination(ctx, jobInput.MaxPages, threadCtx.PageToken, func(pageToken string) (string, error) {
+					threadCtx.PageToken = pageToken
+					return GetCommentThreads(
+						ctx,
+						client,
+						store,
+						cfg,
+						threadCtx,
+						commentCh,
+					)
+				})
+			}
+		})
+	}
+	for range cfg.NumWorkers {
+		commentWg.Go(func() {
+			for commentCtx := range commentCh {
+				RunPagination(ctx, jobInput.MaxComments, commentCtx.PageToken, func(pageToken string) (string, error) {
+					commentCtx.PageToken = pageToken
+					return GetComments(
+						client,
+						store,
+						cfg,
+						commentCtx,
+					)
+				})
+			}
+		})
+	}
+	for _, task := range threadTasks {
+		var threadCtx ThreadsContext
+		err := json.Unmarshal([]byte(task.Payload), &threadCtx)
+		if err != nil {
+			return fmt.Errorf("failed to umarshal thread context payload: %w", err)
+		}
+		if err := channel.TryChannel(ctx, threadCh, threadCtx); err != nil {
+			close(threadCh)
+			return err
+		}
+	}
+	close(threadCh)
+
+	for _, task := range commentTasks {
+		var commentCtx CommentsContext
+		err := json.Unmarshal([]byte(task.Payload), &commentCtx)
+		if err != nil {
+			return fmt.Errorf("failed to umarshal comment context payload: %w", err)
+		}
+		if err := channel.TryChannel(ctx, commentCh, commentCtx); err != nil {
+			return err
+		}
+	}
+	go channel.CloseWhenDone(&threadWg, commentCh)
+	commentWg.Wait()
+	return nil
+}
+
+func resumeFromComments(ctx context.Context, client YoutubeClient, store *storage.Store, commentTasks []storage.Task, jobInput *input.InputSchema, cfg *config.Config) error {
+	commentCh := make(chan CommentsContext, cfg.BufferSize)
+	var commentWg sync.WaitGroup
+	for range cfg.NumWorkers {
+		commentWg.Go(func() {
+			for commentCtx := range commentCh {
+				RunPagination(ctx, jobInput.MaxComments, commentCtx.PageToken, func(pageToken string) (string, error) {
+					commentCtx.PageToken = pageToken
+					return GetComments(
+						client,
+						store,
+						cfg,
+						commentCtx,
+					)
+				})
+			}
+		})
+	}
+
+	for _, task := range commentTasks {
+		var commentCtx CommentsContext
+		err := json.Unmarshal([]byte(task.Payload), &commentCtx)
+		if err != nil {
+			return fmt.Errorf("failed to umarshal context payload: %w", err)
+		}
+		if err := channel.TryChannel(ctx, commentCh, commentCtx); err != nil {
+			close(commentCh)
+			return err
+		}
+	}
+	close(commentCh)
+	commentWg.Wait()
+	return nil
 }
 
 type DataStore interface {
