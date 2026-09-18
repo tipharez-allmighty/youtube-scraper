@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"tipharez-allmighty/youtube-scraper/internal/config"
+	"tipharez-allmighty/youtube-scraper/internal/storage"
 )
 
 type JobsCmd struct {
@@ -25,7 +26,7 @@ type JobsStatusCmd struct {
 }
 
 func (j *JobsListCmd) Run(cfg *config.Config) error {
-	store, err := getStore(cfg, j.StateFile)
+	store, err := storage.GetStore(cfg, j.StateFile)
 	if err != nil {
 		return fmt.Errorf("failed to load storage: %w", err)
 	}
@@ -47,7 +48,7 @@ func (j *JobsListCmd) Run(cfg *config.Config) error {
 }
 
 func (j *JobsStatusCmd) Run(cfg *config.Config) error {
-	store, err := getStore(cfg, j.StateFile)
+	store, err := storage.GetStore(cfg, j.StateFile)
 	if err != nil {
 		return fmt.Errorf("failed to load storage: %w", err)
 	}

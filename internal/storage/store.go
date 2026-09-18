@@ -1,10 +1,13 @@
 package storage
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 
+	"tipharez-allmighty/youtube-scraper/internal/config"
 	"tipharez-allmighty/youtube-scraper/internal/input"
 )
 
@@ -18,6 +21,19 @@ func (s *Store) Close() {
 
 func NewStore(db *sql.DB) *Store {
 	return &Store{db}
+}
+
+func GetStore(cfg *config.Config, stateFile string) (*Store, error) {
+	dbPath := stateFile
+	if dbPath == "" {
+		dbPath = cfg.StateFile
+	}
+	db, err := Init(dbPath)
+	if err != nil {
+		return nil, err
+	}
+	store := NewStore(db)
+	return store, nil
 }
 
 func (s *Store) SelectJobs(limit int) ([]Job, error) {
@@ -224,6 +240,21 @@ func (s *Store) UpdateTaskStatus(id string, status Status, error *string) error 
 		`UPDATE tasks SET status = ?, error = ? WHERE id = ?`, status, error, id,
 	)
 	return err
+}
+
+func (s *Store) FailInterruptedTasks(ctx context.Context, jobID string, runErr error) {
+	var errMsg string
+	switch {
+	case ctx.Err() != nil:
+		errMsg = ctx.Err().Error()
+	case runErr != nil:
+		errMsg = runErr.Error()
+	default:
+		return
+	}
+	if err := s.FailRunningTasks(jobID, &errMsg); err != nil {
+		slog.Error("failed to mark running tasks as failed", "job_id", jobID, "error", err)
+	}
 }
 
 func (s *Store) FailRunningTasks(jobID string, error *string) error {

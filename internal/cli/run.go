@@ -27,7 +27,7 @@ func (r *RunCmd) Run(ctx context.Context, cfg *config.Config) (err error) {
 		return fmt.Errorf("wrong input structure: %w", err)
 	}
 
-	store, err := getStore(cfg, payload.StateFile)
+	store, err := storage.GetStore(cfg, payload.StateFile)
 	if err != nil {
 		return fmt.Errorf("failed to load storage: %v", err)
 	}
@@ -40,7 +40,7 @@ func (r *RunCmd) Run(ctx context.Context, cfg *config.Config) (err error) {
 	if err := store.InsertJob(job); err != nil {
 		return fmt.Errorf("failed to create a job: %w", err)
 	}
-	defer func() { failInterruptedTasks(ctx, store, job.ID, err) }()
+	defer func() { store.FailInterruptedTasks(ctx, job.ID, err) }()
 
 	client := youtube.New(cfg.YoutubeAPIKey, cfg.YoutubeBaseURL)
 	if err := youtube.RunSearch(ctx, cfg, client, store, job, payload); err != nil {

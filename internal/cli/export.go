@@ -11,6 +11,7 @@ import (
 	"tipharez-allmighty/youtube-scraper/internal/channel"
 	"tipharez-allmighty/youtube-scraper/internal/config"
 	"tipharez-allmighty/youtube-scraper/internal/export"
+	"tipharez-allmighty/youtube-scraper/internal/storage"
 )
 
 type ExportCmd struct {
@@ -34,7 +35,7 @@ func (e *ExportCmd) Run(cfg *config.Config) error {
 			return nil
 		}
 	}
-	store, err := getStore(cfg, e.StateFile)
+	store, err := storage.GetStore(cfg, e.StateFile)
 	if err != nil {
 		return fmt.Errorf("failed to load storage: %w", err)
 	}

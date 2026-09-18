@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"tipharez-allmighty/youtube-scraper/internal/config"
+	"tipharez-allmighty/youtube-scraper/internal/storage"
 	"tipharez-allmighty/youtube-scraper/internal/youtube"
 )
 
@@ -14,12 +15,12 @@ type ResumeCmd struct {
 }
 
 func (r *ResumeCmd) Run(ctx context.Context, cfg *config.Config) (err error) {
-	store, err := getStore(cfg, r.StateFile)
+	store, err := storage.GetStore(cfg, r.StateFile)
 	if err != nil {
 		return fmt.Errorf("failed to load storage: %w", err)
 	}
 	defer store.Close()
-	defer func() { failInterruptedTasks(ctx, store, r.JobID, err) }()
+	defer func() { store.FailInterruptedTasks(ctx, r.JobID, err) }()
 	jobInput, err := store.SelectJobInput(r.JobID)
 	if err != nil {
 		return fmt.Errorf("failed to load job's input: %w", err)
