@@ -316,6 +316,13 @@ func InsertComments(tx TxExecutable, threads []Comment) error {
 	return nil
 }
 
+func (s *Store) VacuumDB(path string) error {
+	if _, err := s.db.Exec(`VACUUM INTO ?`, path); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (s *Store) CleanDataByJobID(jobID string) error {
 	tx, err := s.db.Begin()
 	if err != nil {

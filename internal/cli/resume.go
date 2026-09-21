@@ -34,7 +34,7 @@ func (r *ResumeCmd) Run(ctx context.Context, cfg *config.Config) (err error) {
 	}
 	client := youtube.New(cfg.YoutubeAPIKey, cfg.YoutubeBaseURL)
 
-	if err := youtube.ResumeSearchTasks(ctx, cfg, client, store, jobInput, tasks); err != nil {
+	if err := youtube.ResumeSearchTasks(ctx, cfg, client, store, *jobInput, tasks); err != nil {
 		return fmt.Errorf("failed to resume tasks: %w", err)
 	}
 

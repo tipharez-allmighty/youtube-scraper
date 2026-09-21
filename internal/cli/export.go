@@ -24,22 +24,23 @@ type ExportCmd struct {
 func (e *ExportCmd) Run(cfg *config.Config) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	filePath := filepath.Join(e.Path, e.JobID)
-	if err := os.MkdirAll(filePath, 0o755); err != nil {
-		return fmt.Errorf("failed to create folder for exported data: %w", err)
-	}
-	if e.Format == "sqlite" {
-		if err := export.ExportSQLite(cfg, e.JobID, e.StateFile, filePath); err != nil {
-			return fmt.Errorf("failed to export sqlite data: %w", err)
-		} else {
-			return nil
-		}
-	}
 	store, err := storage.GetStore(cfg, e.StateFile)
 	if err != nil {
 		return fmt.Errorf("failed to load storage: %w", err)
 	}
 	defer store.Close()
+	filePath := filepath.Join(e.Path, e.JobID)
+	if err := os.MkdirAll(filePath, 0o755); err != nil {
+		return fmt.Errorf("failed to create folder for exported data: %w", err)
+	}
+	if e.Format == "sqlite" {
+		if err := export.ExportSQLite(cfg, store, e.JobID, e.StateFile, filePath); err != nil {
+			return fmt.Errorf("failed to export sqlite data: %w", err)
+		} else {
+			return nil
+		}
+	}
+
 	var wg sync.WaitGroup
 	errChan := make(chan error, 3)
 

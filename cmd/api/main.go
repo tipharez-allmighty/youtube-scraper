@@ -19,12 +19,12 @@ func main() {
 
 	cfg, err := config.Load()
 	if err != nil {
-		logger.Error("failed to load config", "error", err)
+		logger.Error("Failed to load config", "error", err)
 		os.Exit(1)
 	}
 	store, err := storage.GetStore(cfg, "")
 	if err != nil {
-		logger.Error("failed to load storage", "error", err)
+		logger.Error("Failed to load storage", "error", err)
 		os.Exit(1)
 	}
 	defer store.Close()
@@ -33,8 +33,10 @@ func main() {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("POST /youtube/jobs", api.CreateJob(ctx, cfg, store, api.YoutubeSearchJob))
-	mux.HandleFunc("GET /jobs/status/{id}", api.GetJobStatus(cfg, store))
+	mux.HandleFunc("POST /jobs/{id}/resume", api.ResumeTasks(ctx, cfg, store, api.YoutubeResumeJob))
+	mux.HandleFunc("GET /jobs/{id}/status", api.GetJobStatus(cfg, store))
 	mux.HandleFunc("GET /jobs", api.GetJobs(cfg, store))
+	mux.HandleFunc("GET /jobs/{id}/export/sql", api.ExportSQLite(cfg, store))
 
 	serverAddr := ":8080"
 	logger.Info("Server is listening.", "port", serverAddr)

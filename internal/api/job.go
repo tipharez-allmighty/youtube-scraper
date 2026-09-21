@@ -11,12 +11,15 @@ import (
 	"tipharez-allmighty/youtube-scraper/internal/youtube"
 )
 
-type JobFunc func(ctx context.Context, cfg *config.Config, payload input.InputSchema, job storage.Job)
+type (
+	SearchJobFunc func(ctx context.Context, cfg *config.Config, payload input.InputSchema, job storage.Job)
+	ResumeJobFunc func(ctx context.Context, cfg *config.Config, jobID string, payload input.InputSchema, tasks []storage.Task)
+)
 
 func YoutubeSearchJob(ctx context.Context, cfg *config.Config, payload input.InputSchema, job storage.Job) {
-	store, err := storage.GetStore(cfg, payload.StateFile)
+	store, err := storage.GetStore(cfg, "")
 	if err != nil {
-		slog.Error("failed to load storage during youtube search", "error", err)
+		slog.Error("failed to load storage during youtube search job", "error", err)
 		return
 	}
 	defer store.Close()
@@ -28,3 +31,18 @@ func YoutubeSearchJob(ctx context.Context, cfg *config.Config, payload input.Inp
 	}
 }
 
+func YoutubeResumeJob(ctx context.Context, cfg *config.Config, jobID string, payload input.InputSchema, tasks []storage.Task) {
+	store, err := storage.GetStore(cfg, "")
+	if err != nil {
+		slog.Error("failed to load storage during youtube resume job", "error", err)
+		return
+	}
+	defer store.Close()
+	defer func() { store.FailInterruptedTasks(ctx, jobID, err) }()
+	client := youtube.New(cfg.YoutubeAPIKey, cfg.YoutubeBaseURL)
+
+	if err = youtube.ResumeSearchTasks(ctx, cfg, client, store, payload, tasks); err != nil {
+		err = fmt.Errorf("failed to resume tasks: %w", err)
+		return
+	}
+}
