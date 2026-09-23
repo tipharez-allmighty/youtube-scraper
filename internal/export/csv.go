@@ -5,20 +5,15 @@ import (
 	"context"
 	"encoding/csv"
 	"fmt"
-	"os"
+	"io"
 	"reflect"
 	"time"
 )
 
 type SelectorFunc[T any] func(jobID string, limit, offset int) ([]T, int, error)
 
-func WriteCSV[T any](ctx context.Context, filename string, jobID string, limit int, sfunc SelectorFunc[T]) error {
-	file, err := os.Create(filename)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-	writer := csv.NewWriter(file)
+func WriteCSV[T any](ctx context.Context, w io.Writer, jobID string, limit int, sfunc SelectorFunc[T]) error {
+	writer := csv.NewWriter(w)
 	defer writer.Flush()
 
 	offset := 0
@@ -111,4 +106,3 @@ func formatField(fv reflect.Value) string {
 	}
 	return fmt.Sprintf("%v", fv.Interface())
 }
-

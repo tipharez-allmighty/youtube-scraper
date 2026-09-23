@@ -10,6 +10,7 @@ import (
 
 	"tipharez-allmighty/youtube-scraper/internal/api"
 	"tipharez-allmighty/youtube-scraper/internal/config"
+	"tipharez-allmighty/youtube-scraper/internal/export"
 	"tipharez-allmighty/youtube-scraper/internal/storage"
 )
 
@@ -32,11 +33,12 @@ func main() {
 	defer stop()
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("POST /youtube/jobs", api.CreateJob(ctx, cfg, store, api.YoutubeSearchJob))
-	mux.HandleFunc("POST /jobs/{id}/resume", api.ResumeTasks(ctx, cfg, store, api.YoutubeResumeJob))
-	mux.HandleFunc("GET /jobs/{id}/status", api.GetJobStatus(cfg, store))
+	mux.HandleFunc("POST /jobs/youtube", api.CreateJob(ctx, cfg, store, api.YoutubeSearchJob))
+	mux.HandleFunc("POST /jobs/youtube/{id}/resume", api.ResumeTasks(ctx, cfg, store, api.YoutubeResumeJob))
 	mux.HandleFunc("GET /jobs", api.GetJobs(cfg, store))
-	mux.HandleFunc("GET /jobs/{id}/export/sql", api.ExportSQLite(cfg, store))
+	mux.HandleFunc("GET /jobs/{id}/status", api.GetJobStatus(cfg, store))
+	mux.HandleFunc("GET /jobs/{id}/export/sql", api.ExportSQLite(cfg, store, export.ExportSQLite))
+	mux.HandleFunc("GET /jobs/{id}/export/csv", api.ExportCSV(cfg, store))
 
 	serverAddr := ":8080"
 	logger.Info("Server is listening.", "port", serverAddr)
