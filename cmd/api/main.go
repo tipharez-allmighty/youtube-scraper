@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 	"os"
@@ -41,8 +42,17 @@ func main() {
 	mux.HandleFunc("GET /jobs/{id}/export/csv", api.ExportCSV(cfg, store))
 
 	serverAddr := ":8080"
+	srv := &http.Server{
+		Addr:    serverAddr,
+		Handler: mux,
+	}
+	go func() {
+		<-ctx.Done()
+		logger.Info("Shutting down...")
+		srv.Close()
+	}()
 	logger.Info("Server is listening.", "port", serverAddr)
-	if err := http.ListenAndServe(serverAddr, mux); err != nil {
+	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		logger.Error("Server failed to start", "error", err)
 	}
 }

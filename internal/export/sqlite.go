@@ -36,7 +36,7 @@ func ExportSQLite(cfg *config.Config, store *storage.Store, jobID, file, path st
 	defer func() {
 		if err != nil {
 			if err := deleteDBFile(dstPath); err != nil {
-				slog.Error("Faield to delete file during failure", "error", err)
+				slog.Error("Failed to delete file during failure", "error", err)
 			}
 		}
 	}()

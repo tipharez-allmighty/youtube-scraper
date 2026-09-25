@@ -33,7 +33,7 @@ func CreateJob(ctx context.Context, cfg *config.Config, store *storage.Store, yt
 	return func(w http.ResponseWriter, r *http.Request) {
 		var payload input.InputSchema
 		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-			writeJSONError(w, "Invalid input foramt", http.StatusBadRequest)
+			writeJSONError(w, "Invalid input format", http.StatusBadRequest)
 			return
 		}
 		inputValidator := validator.New()
@@ -98,7 +98,7 @@ func GetJobs(cfg *config.Config, store *storage.Store) http.HandlerFunc {
 		if limitStr != "" {
 			limitParsed, err := strconv.Atoi(limitStr)
 			if err != nil {
-				slog.Error("String conversion into intreger failed", "value", limitStr, "error", err)
+				slog.Error("String conversion into integer failed", "value", limitStr, "error", err)
 				writeJSONError(w, "limit should be numeric", http.StatusBadRequest)
 				return
 			}
@@ -128,6 +128,10 @@ func GetJobStatus(cfg *config.Config, store *storage.Store) http.HandlerFunc {
 		}
 		jobStatus, err := store.SelectJobsStatus(jobID)
 		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				writeJSONError(w, fmt.Sprintf("There is no job with id: %v", jobID), http.StatusNotFound)
+				return
+			}
 			slog.Error("Failed to select jobs", "job_id", jobID, "error", err)
 			writeJSONError(w, "Internal server error", http.StatusInternalServerError)
 			return
@@ -295,7 +299,6 @@ func ExportCSV(cfg *config.Config, store *storage.Store) http.HandlerFunc {
 				return
 			}
 			file.Close()
-
 		}
 	}
 }
