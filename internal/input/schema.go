@@ -20,7 +20,7 @@ type Query struct {
 }
 
 type InputSchema struct {
-	Queries            []Query `json:"queries" yaml:"queries"               validate:"required"`
+	Queries            []Query `json:"queries" yaml:"queries" validate:"required,min=1,dive"`
 	MaxResultsPerQuery int     `json:"max_results_per_query" yaml:"max_results_per_query" validate:"required,min=1,max=50"`
 	StateFile          string  `json:"state_file" yaml:"state_file"`
 	MaxPages           int     `json:"max_pages" yaml:"max_pages" validate:"min=0"`
