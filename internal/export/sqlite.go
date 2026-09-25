@@ -3,7 +3,7 @@ package export
 import (
 	"database/sql"
 	"fmt"
-	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 
@@ -11,7 +11,7 @@ import (
 	"tipharez-allmighty/youtube-scraper/internal/storage"
 )
 
-func getStoreForExport(cfg *config.Config, stateFile string) (*storage.Store, error) {
+func GetStoreForExport(cfg *config.Config, stateFile string) (*storage.Store, error) {
 	dbPath := stateFile
 	if dbPath == "" {
 		dbPath = cfg.StateFile
@@ -24,26 +24,28 @@ func getStoreForExport(cfg *config.Config, stateFile string) (*storage.Store, er
 	return store, nil
 }
 
-func ExportSQLite(cfg *config.Config, jobID, file, path string) (err error) {
+func ExportSQLite(cfg *config.Config, store *storage.Store, jobID, file, path string) (err error) {
 	dbPath := file
 	if dbPath == "" {
 		dbPath = cfg.StateFile
 	}
 	dstPath := filepath.Join(path, filepath.Base(dbPath))
-	if err = copyDBFile(dbPath, dstPath); err != nil {
-		return fmt.Errorf("failed to create sqlite export file: %w", err)
+	if err = copyDBFile(store, dstPath); err != nil {
+		return fmt.Errorf("failed to vacuum sqlite export file: %w", err)
 	}
 	defer func() {
 		if err != nil {
-			deleteDBFile(dstPath)
+			if err := deleteDBFile(dstPath); err != nil {
+				slog.Error("Failed to delete file during failure", "error", err)
+			}
 		}
 	}()
-	store, err := getStoreForExport(cfg, dstPath)
+	storeExp, err := GetStoreForExport(cfg, dstPath)
 	if err != nil {
 		return fmt.Errorf("failed to load export storage: %w", err)
 	}
-	defer store.Close()
-	if err = store.CleanDataByJobID(jobID); err != nil {
+	defer storeExp.Close()
+	if err = storeExp.CleanDataByJobID(jobID); err != nil {
 		return fmt.Errorf("failed to clean sqlite data: %w", err)
 	}
 	return nil
@@ -57,22 +59,11 @@ func initForExport(path string) (*sql.DB, error) {
 	return db, nil
 }
 
-func copyDBFile(dbPath, dstPath string) error {
-	srcFile, err := os.Open(dbPath)
-	if err != nil {
+func copyDBFile(store *storage.Store, dstPath string) error {
+	if err := os.Remove(dstPath); err != nil && !os.IsNotExist(err) {
 		return err
 	}
-	defer srcFile.Close()
-	dstFile, err := os.Create(dstPath)
-	if err != nil {
-		return err
-	}
-	defer dstFile.Close()
-	if _, err := io.Copy(dstFile, srcFile); err != nil {
-		return err
-	}
-	defer dstFile.Sync()
-	return nil
+	return store.VacuumDB(dstPath)
 }
 
 func deleteDBFile(filePath string) error {

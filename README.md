@@ -147,3 +147,18 @@ Writes videos, comment threads, and comments for `<job-id>` under `<path>/<job-i
 | `-p` | Output directory (default: `./data/`) |
 | `-f` | Output format: `csv` or `sqlite` (default: `csv`) |
 | `-s` | Path to state file, same as on `jobs`/`resume` |
+
+---
+
+## HTTP API
+
+The same functionality is also available as an HTTP server (`go run ./cmd/api`), listening on `:8080` and using the same environment variables. Job creation and resume run in the background and return the job ID immediately; exports are only allowed once a job has finished with no running or failed tasks (otherwise `409`).
+
+| Endpoint | Description |
+|---|---|
+| `POST /jobs/youtube` | Start a scrape job; body is the same JSON input as `run` |
+| `POST /jobs/youtube/{id}/resume` | Retry failed tasks of a job (`409` if there are none) |
+| `GET /jobs?limit=N` | List recent jobs (default limit: 5) |
+| `GET /jobs/{id}/status` | Task counts for a job |
+| `GET /jobs/{id}/export/csv` | Download a zip with `videos.csv`, `threads.csv`, `comments.csv` |
+| `GET /jobs/{id}/export/sql` | Download a standalone SQLite file with that job's data |

@@ -1,10 +1,13 @@
 package storage
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 
+	"tipharez-allmighty/youtube-scraper/internal/config"
 	"tipharez-allmighty/youtube-scraper/internal/input"
 )
 
@@ -18,6 +21,19 @@ func (s *Store) Close() {
 
 func NewStore(db *sql.DB) *Store {
 	return &Store{db}
+}
+
+func GetStore(cfg *config.Config, stateFile string) (*Store, error) {
+	dbPath := stateFile
+	if dbPath == "" {
+		dbPath = cfg.StateFile
+	}
+	db, err := Init(dbPath)
+	if err != nil {
+		return nil, err
+	}
+	store := NewStore(db)
+	return store, nil
 }
 
 func (s *Store) SelectJobs(limit int) ([]Job, error) {
@@ -226,6 +242,21 @@ func (s *Store) UpdateTaskStatus(id string, status Status, error *string) error 
 	return err
 }
 
+func (s *Store) FailInterruptedTasks(ctx context.Context, jobID string, runErr error) {
+	var errMsg string
+	switch {
+	case ctx.Err() != nil:
+		errMsg = ctx.Err().Error()
+	case runErr != nil:
+		errMsg = runErr.Error()
+	default:
+		return
+	}
+	if err := s.FailRunningTasks(jobID, &errMsg); err != nil {
+		slog.Error("failed to mark running tasks as failed", "job_id", jobID, "error", err)
+	}
+}
+
 func (s *Store) FailRunningTasks(jobID string, error *string) error {
 	_, err := s.db.Exec(
 		`UPDATE tasks SET status = 'failed', error = ? WHERE job_id = ? AND status = 'running'`, error, jobID,
@@ -281,6 +312,13 @@ func InsertComments(tx TxExecutable, threads []Comment) error {
 			`INSERT OR IGNORE INTO comments (id, thread_id, job_id, author, text_display, text_original, like_count, published_at) VALUES (?,?,?,?,?,?,?,?)`, t.ID, t.ThreadID, t.JobID, t.Author, t.TextDisplay, t.TextOriginal, t.LikeCount, t.PublishedAt); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+func (s *Store) VacuumDB(path string) error {
+	if _, err := s.db.Exec(`VACUUM INTO ?`, path); err != nil {
+		return err
 	}
 	return nil
 }

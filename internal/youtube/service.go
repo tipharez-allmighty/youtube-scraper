@@ -189,7 +189,7 @@ type failedTasks struct {
 	commentTasks []storage.Task
 }
 
-func ResumeSearchTasks(ctx context.Context, cfg *config.Config, client YoutubeClient, store *storage.Store, jobInput *input.InputSchema, tasks []storage.Task) error {
+func ResumeSearchTasks(ctx context.Context, cfg *config.Config, client YoutubeClient, store *storage.Store, jobInput input.InputSchema, tasks []storage.Task) error {
 	ft := failedTasks{}
 	for _, task := range tasks {
 		switch task.Type {
@@ -218,7 +218,7 @@ func ResumeSearchTasks(ctx context.Context, cfg *config.Config, client YoutubeCl
 	return nil
 }
 
-func resumeFromSearch(ctx context.Context, client YoutubeClient, store *storage.Store, ft failedTasks, jobInput *input.InputSchema, cfg *config.Config) error {
+func resumeFromSearch(ctx context.Context, client YoutubeClient, store *storage.Store, ft failedTasks, jobInput input.InputSchema, cfg *config.Config) error {
 	queryCh := make(chan VideosContext, cfg.BufferSize)
 	threadCh := make(chan ThreadsContext, cfg.BufferSize)
 	commentCh := make(chan CommentsContext, cfg.BufferSize)
@@ -315,7 +315,7 @@ func resumeFromSearch(ctx context.Context, client YoutubeClient, store *storage.
 	return nil
 }
 
-func resumeFromThreads(ctx context.Context, client YoutubeClient, store *storage.Store, threadTasks []storage.Task, commentTasks []storage.Task, jobInput *input.InputSchema, cfg *config.Config) error {
+func resumeFromThreads(ctx context.Context, client YoutubeClient, store *storage.Store, threadTasks []storage.Task, commentTasks []storage.Task, jobInput input.InputSchema, cfg *config.Config) error {
 	threadCh := make(chan ThreadsContext, cfg.BufferSize)
 	commentCh := make(chan CommentsContext, cfg.BufferSize)
 	var threadWg sync.WaitGroup
@@ -381,7 +381,7 @@ func resumeFromThreads(ctx context.Context, client YoutubeClient, store *storage
 	return nil
 }
 
-func resumeFromComments(ctx context.Context, client YoutubeClient, store *storage.Store, commentTasks []storage.Task, jobInput *input.InputSchema, cfg *config.Config) error {
+func resumeFromComments(ctx context.Context, client YoutubeClient, store *storage.Store, commentTasks []storage.Task, jobInput input.InputSchema, cfg *config.Config) error {
 	commentCh := make(chan CommentsContext, cfg.BufferSize)
 	var commentWg sync.WaitGroup
 	for range cfg.NumWorkers {

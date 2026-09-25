@@ -23,18 +23,18 @@ const (
 )
 
 type Job struct {
-	ID        string
-	Input     input.InputSchema
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	ID        string            `json:"id" validate:"required"`
+	Input     input.InputSchema `json:"input" validate:"required"`
+	CreatedAt time.Time         `json:"created_at" validate:"required"`
+	UpdatedAt time.Time         `json:"updated_at" validate:"required"`
 }
 
 type JobStatus struct {
-	ID      string
-	Input   input.InputSchema
-	Total   int
-	Running int
-	Failed  int
+	ID      string            `json:"id" validate:"required"`
+	Input   input.InputSchema `json:"input" validate:"required"`
+	Total   int               `json:"total" validate:"required,gte=0"`
+	Running int               `json:"running" validate:"required,gte=0"`
+	Failed  int               `json:"failed" validate:"required,gte=0"`
 }
 
 type Task struct {
