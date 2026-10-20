@@ -20,10 +20,12 @@ type Query struct {
 }
 
 type InputSchema struct {
-	Queries            []Query `json:"queries" yaml:"queries" validate:"required,min=1,dive"`
-	MaxResultsPerQuery int     `json:"max_results_per_query" yaml:"max_results_per_query" validate:"required,min=1,max=50"`
-	StateFile          string  `json:"state_file" yaml:"state_file"`
-	MaxPages           int     `json:"max_pages" yaml:"max_pages" validate:"min=0"`
-	MaxThreads         int     `json:"max_threads" yaml:"max_threads" validate:"min=0"`
-	MaxComments        int     `json:"max_comments" yaml:"max_comments" validate:"min=0"`
+	Queries []Query `json:"queries" yaml:"queries" validate:"required_without=VideoIDs,omitempty,min=1,dive"`
+	// VideoIDs skips search and scrapes these videos directly (fetched in batches of 50).
+	VideoIDs           []string `json:"video_ids" yaml:"video_ids" validate:"required_without=Queries,omitempty,min=1,dive,required"`
+	MaxResultsPerQuery int      `json:"max_results_per_query" yaml:"max_results_per_query" validate:"required,min=1,max=50"`
+	StateFile          string   `json:"state_file" yaml:"state_file"`
+	MaxPages           int      `json:"max_pages" yaml:"max_pages" validate:"min=0"`
+	MaxThreads         int      `json:"max_threads" yaml:"max_threads" validate:"min=0"`
+	MaxComments        int      `json:"max_comments" yaml:"max_comments" validate:"min=0"`
 }

@@ -41,7 +41,14 @@ type VideosContext struct {
 	Order           input.Order
 	PublishedBefore time.Time
 	PublishedAfter  time.Time
+	// VideoIDs, when set, replaces the search with a direct lookup of these videos.
+	VideoIDs []string `json:",omitempty"`
 }
+
+const (
+	videoIDsBatchSize = 50
+	videoIDsQueryText = "video_id"
+)
 
 type ThreadsContext struct {
 	Context
@@ -104,7 +111,7 @@ func WithExpBackoff(fn NetworkRequestFunc, params url.Values, out YoutubeRespons
 }
 
 func RunSearch(ctx context.Context, cfg *config.Config, client YoutubeClient, store *storage.Store, job storage.Job, payload input.InputSchema) error {
-	queryCh := make(chan input.Query, cfg.BufferSize)
+	queryCh := make(chan VideosContext, cfg.BufferSize)
 	threadCh := make(chan ThreadsContext, cfg.BufferSize)
 	commentCh := make(chan CommentsContext, cfg.BufferSize)
 	var searchWg sync.WaitGroup
@@ -117,21 +124,15 @@ func RunSearch(ctx context.Context, cfg *config.Config, client YoutubeClient, st
 	}
 	for range cfg.NumWorkers {
 		searchWg.Go(func() {
-			for query := range queryCh {
+			for videosCtx := range queryCh {
 				RunPagination(ctx, payload.MaxPages, "", func(pageToken string) (string, error) {
+					videosCtx.PageToken = pageToken
 					return GetVideos(
 						ctx,
 						client,
 						store,
 						cfg,
-						VideosContext{
-							Context:         queryContext,
-							PageToken:       pageToken,
-							Query:           query.Text,
-							Order:           query.Order,
-							PublishedBefore: query.PublishedBefore,
-							PublishedAfter:  query.PublishedAfter,
-						},
+						videosCtx,
 						threadCh,
 					)
 				})
@@ -172,8 +173,26 @@ func RunSearch(ctx context.Context, cfg *config.Config, client YoutubeClient, st
 	}
 	go channel.CloseWhenDone(&searchWg, threadCh)
 	go channel.CloseWhenDone(&commentThreadWg, commentCh)
+	var videosCtxs []VideosContext
 	for _, query := range payload.Queries {
-		if err := channel.TryChannel(ctx, queryCh, query); err != nil {
+		videosCtxs = append(videosCtxs, VideosContext{
+			Context:         queryContext,
+			Query:           query.Text,
+			Order:           query.Order,
+			PublishedBefore: query.PublishedBefore,
+			PublishedAfter:  query.PublishedAfter,
+		})
+	}
+	for start := 0; start < len(payload.VideoIDs); start += videoIDsBatchSize {
+		end := min(start+videoIDsBatchSize, len(payload.VideoIDs))
+		videosCtxs = append(videosCtxs, VideosContext{
+			Context:  queryContext,
+			Query:    videoIDsQueryText,
+			VideoIDs: payload.VideoIDs[start:end],
+		})
+	}
+	for _, videosCtx := range videosCtxs {
+		if err := channel.TryChannel(ctx, queryCh, videosCtx); err != nil {
 			close(queryCh)
 			return err
 		}
@@ -433,6 +452,12 @@ func GetVideos(ctx context.Context, c YoutubeClient, s DataStore, cfg *config.Co
 		"part":       {"id,snippet"},
 		"maxResults": {fmt.Sprint(vctx.MaxResults)},
 	}
+	if len(vctx.VideoIDs) > 0 {
+		params = url.Values{
+			"id":   {strings.Join(vctx.VideoIDs, ",")},
+			"part": {"id,snippet"},
+		}
+	}
 	if vctx.Order != "" {
 		params.Set("order", string(vctx.Order))
 	}
@@ -450,7 +475,11 @@ func GetVideos(ctx context.Context, c YoutubeClient, s DataStore, cfg *config.Co
 		params.Set("pageToken", vctx.PageToken)
 	}
 
-	taskID := getDeterministicID(vctx.JobID, vctx.Query, vctx.PageToken)
+	// Dates are part of the ID so the same query text with different date ranges gets separate tasks.
+	taskID := getDeterministicID(vctx.JobID, vctx.Query, vctx.PublishedAfter.Format(time.RFC3339), vctx.PublishedBefore.Format(time.RFC3339), vctx.PageToken)
+	if len(vctx.VideoIDs) > 0 {
+		taskID = getDeterministicID(vctx.JobID, videoIDsQueryText, strings.Join(vctx.VideoIDs, ","))
+	}
 	var payload []byte
 	payload, err = json.Marshal(vctx)
 	if err != nil {
@@ -463,7 +492,16 @@ func GetVideos(ctx context.Context, c YoutubeClient, s DataStore, cfg *config.Co
 	defer failTask(s, taskID, &err)
 
 	var searchResponse SearchResponse
-	if err = WithExpBackoff(c.get, params, &searchResponse, cfg.MaxRetries); err != nil {
+	if len(vctx.VideoIDs) > 0 {
+		var videoResponse VideoListResponse
+		if err = WithExpBackoff(c.get, params, &videoResponse, cfg.MaxRetries); err != nil {
+			return "", fmt.Errorf("video lookup failed: %w", err)
+		}
+		// Videos that are deleted or private are silently missing from the response.
+		for _, item := range videoResponse.Items {
+			searchResponse.Items = append(searchResponse.Items, SearchItem{ID: SearchID{VideoID: item.ID}, Snippet: item.Snippet})
+		}
+	} else if err = WithExpBackoff(c.get, params, &searchResponse, cfg.MaxRetries); err != nil {
 		return "", fmt.Errorf("search failed: %w", err)
 	}
 	videos := make([]storage.Video, 0, len(searchResponse.Items))
