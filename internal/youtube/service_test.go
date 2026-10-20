@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"reflect"
 	"testing"
+	"time"
 
 	"tipharez-allmighty/youtube-scraper/internal/config"
 	"tipharez-allmighty/youtube-scraper/internal/storage"
@@ -176,6 +177,25 @@ func (m *mockTx) Exec(query string, args ...any) (sql.Result, error) {
 }
 
 func TestGetVideos(t *testing.T) {
+	t.Run("same query with different dates gets different task ids", func(t *testing.T) {
+		client := MockYoutubeClient{resp: &SearchResponse{}}
+		dataStore := mockDataStore{}
+		threadCh := make(chan ThreadsContext, 10)
+		for _, after := range []time.Time{
+			time.Date(2022, 3, 15, 0, 0, 0, 0, time.UTC),
+			time.Date(2023, 5, 5, 0, 0, 0, 0, time.UTC),
+		} {
+			if _, err := GetVideos(
+				context.Background(), &client, &dataStore, &config.Config{MaxRetries: 3},
+				VideosContext{Query: "cats", PublishedAfter: after, Context: Context{JobID: "job1", MaxResults: 5}}, threadCh); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		}
+		if len(dataStore.tasks) != 2 || dataStore.tasks[0].ID == dataStore.tasks[1].ID {
+			t.Fatalf("expected two distinct task ids, got %v", dataStore.tasks)
+		}
+	})
+
 	t.Run("success", func(t *testing.T) {
 		client := MockYoutubeClient{
 			resp: &SearchResponse{
@@ -207,6 +227,40 @@ func TestGetVideos(t *testing.T) {
 		}
 		if nextToken != "vid1" {
 			t.Fatalf("wrong token %q != 'vid1'", nextToken)
+		}
+	})
+
+	t.Run("video ids", func(t *testing.T) {
+		client := MockYoutubeClient{
+			resp: &VideoListResponse{
+				Items: []VideoItem{{ID: "video_id1"}, {ID: "video_id2"}},
+			},
+		}
+		dataStore := mockDataStore{}
+		threadCh := make(chan ThreadsContext, 10)
+		nextToken, err := GetVideos(
+			context.Background(), &client, &dataStore, &config.Config{MaxRetries: 3},
+			VideosContext{
+				Query:    videoIDsQueryText,
+				VideoIDs: []string{"video_id1", "video_id2", "deleted_id"},
+				Context:  Context{JobID: "job1", MaxResults: 50},
+			}, threadCh)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		close(threadCh)
+		var ids []string
+		for tc := range threadCh {
+			ids = append(ids, tc.VideoID)
+		}
+		if !reflect.DeepEqual(ids, []string{"video_id1", "video_id2"}) {
+			t.Fatalf("unexpected thread contexts for video ids: %v", ids)
+		}
+		if nextToken != "" {
+			t.Fatalf("video id lookup should not paginate, got token %q", nextToken)
+		}
+		if len(dataStore.tasks) != 1 || dataStore.tasks[0].Type != storage.Search {
+			t.Fatalf("expected one search task, got %v", dataStore.tasks)
 		}
 	})
 

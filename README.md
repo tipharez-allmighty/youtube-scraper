@@ -87,11 +87,31 @@ redirection, so use `Get-Content file | yt-scraper run -f ...` instead.
 | Field | Description |
 |---|---|
 | `queries` | List of search queries. Each has `text` and optional `order`, `published_after`, `published_before` |
+| `video_ids` | List of YouTube video IDs to scrape directly, skipping search |
 | `max_results_per_query` | Results per page (1–50) |
 | `max_pages` | How many pages of video results to fetch per query |
 | `max_threads` | How many pages of comment threads to fetch per video |
 | `max_comments` | How many pages of replies to fetch per thread |
 | `state_file` | Override the SQLite path for this job (takes priority over `STATE_FILE` env var) |
+
+At least one of `queries` or `video_ids` is required.
+
+**Same query, different dates:** the same `text` can appear more than once with different `published_after`/`published_before` windows. Each window is searched as its own task.
+
+**Scraping known videos (`video_ids`):** instead of searching, list the videos you want:
+
+```yaml
+video_ids:
+  - "dQw4w9WgXcQ"
+  - "ywL0QtH7UH8"
+max_results_per_query: 50
+max_threads: 0     # 0 = no limit, fetch all pages
+max_comments: 0    # 0 = no limit, fetch all pages
+```
+
+The IDs are looked up in batches of 50, then their comment threads and replies are scraped the same way as for search results. Deleted or private videos are skipped. These videos are stored with `query_text` set to `video_id`.
+
+A job can have both `queries` and `video_ids`. If a video comes from both, it is stored once and its comments are not duplicated.
 
 ---
 

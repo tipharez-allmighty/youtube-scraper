@@ -29,6 +29,17 @@ type SearchResponse struct {
 
 func (*SearchResponse) URL() string { return "search" }
 
+type VideoItem struct {
+	ID      string        `json:"id"`
+	Snippet SearchSnippet `json:"snippet"`
+}
+
+type VideoListResponse struct {
+	Items []VideoItem `json:"items"`
+}
+
+func (*VideoListResponse) URL() string { return "videos" }
+
 type CommentSnippet struct {
 	ParentID          string    `json:"parentId,omitempty"`
 	TextDisplay       string    `json:"textDisplay"`
