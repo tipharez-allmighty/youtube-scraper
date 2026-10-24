@@ -1,7 +1,7 @@
 # Example input for `yt-scraper run -f yaml example-input.yaml`
 # Every field the InputSchema supports is shown below.
 
-# REQUIRED. List of search queries to run. Must have at least one entry.
+# REQUIRED unless video_ids is set. List of search queries to run.
 queries:
     # REQUIRED. The search text sent to YouTube.
   - text: golang concurrency patterns
@@ -19,8 +19,16 @@ queries:
     order: viewCount
   - text: golang vs rust performance
 
+# REQUIRED unless queries is set. Video IDs to scrape directly, skipping search.
+# Looked up in batches of 50, then their comments are scraped like search results.
+# Deleted or private videos are skipped. Stored with query_text "video_id".
+video_ids:
+  - "dQw4w9WgXcQ"
+  - "ywL0QtH7UH8"
+
 # REQUIRED. How many video results to fetch per page, per query. Must be 1-50
-# (this is YouTube API's own per-page cap).
+# (this is YouTube API's own per-page cap). Also the page size for comment
+# threads and replies, so it is still required for a video_ids-only job.
 max_results_per_query: 10
 
 # OPTIONAL. Path to the SQLite file this job's state/results are written to.
