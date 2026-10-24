@@ -242,8 +242,8 @@ func inputSummary(jobInput input.InputSchema) string {
 	case len(jobInput.VideoIDs) == 0:
 		return fmt.Sprint(queries)
 	case len(queries) == 0:
-		return fmt.Sprintf("%d video ids", len(jobInput.VideoIDs))
+		return fmt.Sprintf("%d video id(s)", len(jobInput.VideoIDs))
 	default:
-		return fmt.Sprintf("%v + %d video ids", queries, len(jobInput.VideoIDs))
+		return fmt.Sprintf("%v + %d video id(s)", queries, len(jobInput.VideoIDs))
 	}
 }
