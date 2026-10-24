@@ -125,13 +125,9 @@ func (j *JobsListCmd) Run(cfg *config.Config) error {
 		return err
 	}
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "ID\tCREATED\tQUERIES")
+	fmt.Fprintln(w, "ID\tCREATED\tINPUT")
 	for _, job := range jobs {
-		var queries []string
-		for _, query := range job.Input.Queries {
-			queries = append(queries, query.Text)
-		}
-		fmt.Fprintf(w, "%v\t%v\t%v\n", job.ID, job.CreatedAt.Format(time.DateTime), queries)
+		fmt.Fprintf(w, "%v\t%v\t%v\n", job.ID, job.CreatedAt.Format(time.DateTime), inputSummary(job.Input))
 	}
 	return w.Flush()
 }
@@ -146,13 +142,9 @@ func (j *JobsStatusCmd) Run(cfg *config.Config) error {
 	if err != nil {
 		return err
 	}
-	var queries []string
-	for _, query := range jobStatus.Input.Queries {
-		queries = append(queries, query.Text)
-	}
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintf(w, "ID\tQUERIES\tTOTAL\tRUNNING\tFAILED\n")
-	fmt.Fprintf(w, "%v\t%v\t%v\t%v\t%v\n", jobStatus.ID, queries, jobStatus.Total, jobStatus.Running, jobStatus.Failed)
+	fmt.Fprintf(w, "ID\tINPUT\tTOTAL\tRUNNING\tFAILED\n")
+	fmt.Fprintf(w, "%v\t%v\t%v\t%v\t%v\n", jobStatus.ID, inputSummary(jobStatus.Input), jobStatus.Total, jobStatus.Running, jobStatus.Failed)
 	return w.Flush()
 }
 
@@ -239,4 +231,19 @@ func (e *ExportCmd) Run(cfg *config.Config) (err error) {
 		return errors.Join(errs...)
 	}
 	return nil
+}
+
+func inputSummary(jobInput input.InputSchema) string {
+	var queries []string
+	for _, query := range jobInput.Queries {
+		queries = append(queries, query.Text)
+	}
+	switch {
+	case len(jobInput.VideoIDs) == 0:
+		return fmt.Sprint(queries)
+	case len(queries) == 0:
+		return fmt.Sprintf("%d video ids", len(jobInput.VideoIDs))
+	default:
+		return fmt.Sprintf("%v + %d video ids", queries, len(jobInput.VideoIDs))
+	}
 }
