@@ -23,16 +23,28 @@ go build -o yt-scraper ./cmd/yt-scraper
 mv yt-scraper /usr/local/bin/
 ```
 
-**Configure** via environment variables:
+**Configure** by creating a `.env` file in the yt-scraper config directory
+(`~/.config/yt-scraper/.env` on Linux, `~/Library/Application Support/yt-scraper/.env`
+on macOS, `%AppData%\yt-scraper\.env` on Windows). The file is required.
 
 ```bash
-export YOUTUBE_API_KEY=your_api_key_here
-export STATE_FILE=storage.db   # optional, default: storage.db
-export NUM_WORKERS=5           # optional, default: 5
-export BUFFER_SIZE=10          # optional, default: 10
+mkdir -p ~/.config/yt-scraper
+cat > ~/.config/yt-scraper/.env <<'EOF'
+YOUTUBE_API_KEY=your_api_key_here
+STATE_FILE=/home/you/.local/share/yt-scraper/storage.db
+EOF
 ```
 
-Alternatively, place a `.env` file in the directory you run the binary from and it will be picked up automatically.
+| Variable | Default | |
+|---|---|---|
+| `YOUTUBE_API_KEY` | — | **required** |
+| `STATE_FILE` | `storage.db` | use an absolute path; a relative one resolves against the directory you run from |
+| `NUM_WORKERS` | `5` | |
+| `BUFFER_SIZE` | `10` | |
+| `MAX_RETRIES` | `3` | |
+| `LIMIT_ROWS` | `5000` | |
+
+Variables already exported in your shell take priority over the file.
 
 ---
 
