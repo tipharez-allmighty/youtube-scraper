@@ -7,8 +7,8 @@ import (
 	"os/signal"
 	"syscall"
 
-	"tipharez-allmighty/youtube-scraper/internal/cli"
-	"tipharez-allmighty/youtube-scraper/internal/config"
+	"github.com/tipharez-allmighty/youtube-scraper/internal/cli"
+	"github.com/tipharez-allmighty/youtube-scraper/internal/config"
 
 	"github.com/alecthomas/kong"
 )

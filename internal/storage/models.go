@@ -3,7 +3,7 @@ package storage
 import (
 	"time"
 
-	"tipharez-allmighty/youtube-scraper/internal/input"
+	"github.com/tipharez-allmighty/youtube-scraper/internal/input"
 )
 
 type Status string
@@ -80,4 +80,3 @@ type Comment struct {
 	CommentBase
 	ThreadID string
 }
-

@@ -1,4 +1,4 @@
-module tipharez-allmighty/youtube-scraper
+module github.com/tipharez-allmighty/youtube-scraper
 
 go 1.26.2
 

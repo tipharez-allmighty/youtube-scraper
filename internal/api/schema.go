@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 
-	"tipharez-allmighty/youtube-scraper/internal/storage"
+	"github.com/tipharez-allmighty/youtube-scraper/internal/storage"
 )
 
 type JobSubmitResponse struct {

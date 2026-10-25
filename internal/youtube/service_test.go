@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"tipharez-allmighty/youtube-scraper/internal/config"
-	"tipharez-allmighty/youtube-scraper/internal/storage"
+	"github.com/tipharez-allmighty/youtube-scraper/internal/config"
+	"github.com/tipharez-allmighty/youtube-scraper/internal/storage"
 )
 
 func TestRunPagination(t *testing.T) {
