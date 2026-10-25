@@ -7,8 +7,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"tipharez-allmighty/youtube-scraper/internal/config"
-	"tipharez-allmighty/youtube-scraper/internal/storage"
+	"github.com/tipharez-allmighty/youtube-scraper/internal/config"
+	"github.com/tipharez-allmighty/youtube-scraper/internal/storage"
 )
 
 func GetStoreForExport(cfg *config.Config, stateFile string) (*storage.Store, error) {

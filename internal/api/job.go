@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"log/slog"
 
-	"tipharez-allmighty/youtube-scraper/internal/config"
-	"tipharez-allmighty/youtube-scraper/internal/input"
-	"tipharez-allmighty/youtube-scraper/internal/storage"
-	"tipharez-allmighty/youtube-scraper/internal/youtube"
+	"github.com/tipharez-allmighty/youtube-scraper/internal/config"
+	"github.com/tipharez-allmighty/youtube-scraper/internal/input"
+	"github.com/tipharez-allmighty/youtube-scraper/internal/storage"
+	"github.com/tipharez-allmighty/youtube-scraper/internal/youtube"
 )
 
 type (

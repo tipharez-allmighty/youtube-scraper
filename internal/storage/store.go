@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"log/slog"
 
-	"tipharez-allmighty/youtube-scraper/internal/config"
-	"tipharez-allmighty/youtube-scraper/internal/input"
+	"github.com/tipharez-allmighty/youtube-scraper/internal/config"
+	"github.com/tipharez-allmighty/youtube-scraper/internal/input"
 )
 
 type Store struct {

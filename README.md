@@ -8,10 +8,18 @@ You give it a list of search queries, it fans out across YouTube's API — searc
 
 ## Setup
 
-**Build and install:**
+**Install from GitHub:**
 
 ```bash
-go build -o yt-scraper ./cmd/main.go
+go install github.com/tipharez-allmighty/youtube-scraper/cmd/yt-scraper@latest
+```
+
+This puts the `yt-scraper` binary in `$(go env GOPATH)/bin` — make sure that directory is on your `PATH`.
+
+**Or build from source:**
+
+```bash
+go build -o yt-scraper ./cmd/yt-scraper
 mv yt-scraper /usr/local/bin/
 ```
 

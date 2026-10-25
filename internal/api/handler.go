@@ -18,11 +18,11 @@ import (
 
 	"github.com/google/uuid"
 
-	"tipharez-allmighty/youtube-scraper/internal/channel"
-	"tipharez-allmighty/youtube-scraper/internal/config"
-	"tipharez-allmighty/youtube-scraper/internal/export"
-	"tipharez-allmighty/youtube-scraper/internal/input"
-	"tipharez-allmighty/youtube-scraper/internal/storage"
+	"github.com/tipharez-allmighty/youtube-scraper/internal/channel"
+	"github.com/tipharez-allmighty/youtube-scraper/internal/config"
+	"github.com/tipharez-allmighty/youtube-scraper/internal/export"
+	"github.com/tipharez-allmighty/youtube-scraper/internal/input"
+	"github.com/tipharez-allmighty/youtube-scraper/internal/storage"
 
 	"github.com/go-playground/validator/v10"
 )

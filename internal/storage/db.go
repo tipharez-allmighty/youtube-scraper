@@ -28,4 +28,3 @@ func Init(path string) (*sql.DB, error) {
 	}
 	return db, nil
 }
-

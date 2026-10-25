@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"tipharez-allmighty/youtube-scraper/internal/input"
+	"github.com/tipharez-allmighty/youtube-scraper/internal/input"
 )
 
 func setupTestDBStore(t *testing.T) *Store {
