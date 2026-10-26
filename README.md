@@ -192,7 +192,13 @@ Writes videos, comment threads, and comments for `<job-id>` under `<path>/<job-i
 
 ## HTTP API
 
-The same functionality is also available as an HTTP server (`go run ./cmd/api`), listening on `:8080` and using the same environment variables. Job creation and resume run in the background and return the job ID immediately; exports are only allowed once a job has finished with no running or failed tasks (otherwise `409`).
+The same functionality is also available as an HTTP server (`go run ./cmd/yt-scraper-api`), listening on `:8080` and using the same environment variables. Job creation and resume run in the background and return the job ID immediately; exports are only allowed once a job has finished with no running or failed tasks (otherwise `409`).
+
+**Install from GitHub:**
+
+```bash
+go install github.com/tipharez-allmighty/youtube-scraper/cmd/yt-scraper-api@latest
+```
 
 | Endpoint | Description |
 |---|---|
