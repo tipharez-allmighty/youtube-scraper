@@ -323,6 +323,13 @@ func (s *Store) VacuumDB(path string) error {
 	return nil
 }
 
+func (s *Store) Vacuum() error {
+	if _, err := s.db.Exec(`VACUUM`); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (s *Store) CleanDataByJobID(jobID string) error {
 	tx, err := s.db.Begin()
 	if err != nil {
