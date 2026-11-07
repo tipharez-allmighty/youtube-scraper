@@ -31,7 +31,7 @@ func ExportSQLite(cfg *config.Config, store *storage.Store, jobID, file, path st
 	}
 	dstPath := filepath.Join(path, filepath.Base(dbPath))
 	if err = copyDBFile(store, dstPath); err != nil {
-		return fmt.Errorf("failed to vacuum sqlite export file: %w", err)
+		return fmt.Errorf("failed to copy db for export: %w", err)
 	}
 	defer func() {
 		if err != nil {
@@ -47,6 +47,9 @@ func ExportSQLite(cfg *config.Config, store *storage.Store, jobID, file, path st
 	defer storeExp.Close()
 	if err = storeExp.CleanDataByJobID(jobID); err != nil {
 		return fmt.Errorf("failed to clean sqlite data: %w", err)
+	}
+	if err = storeExp.Vacuum(); err != nil {
+		return fmt.Errorf("failed to compact sqlite export file: %w", err)
 	}
 	return nil
 }
